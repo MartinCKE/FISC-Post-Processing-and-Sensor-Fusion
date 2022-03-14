@@ -1,6 +1,79 @@
 import numpy as np
 import scipy
+import matplotlib.pyplot as plt
+from scipy.signal import butter, sosfilt, sosfreqz, filtfilt
 
+
+def butterworth_LP_filter(data, cutoff, fs, order):
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    #Filter coefficients
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    y = filtfilt(b, a, data)
+    return y
+
+def butterworth_BP_filter(data, lowcut, highcut, fs, order=3):
+        nyq = 0.5 * fs
+        low = lowcut / nyq
+        high = highcut / nyq
+        sos = butter(order, [low, high], analog=False, btype='band', output='sos')
+        w, h = scipy.signal.sosfreqz(sos)
+        y = sosfilt(sos, data)
+        '''
+        plt.plot(data, color='red')
+        plt.plot(y, color='black')
+        #plt.plot((fs * 0.5 / np.pi) * w, abs(h), label="order = %d" % order)
+
+        #db = 20*np.log10(np.abs(h))
+        #plt.plot(w/np.pi, db, 'orange', label='')
+
+        plt.show()
+        quit()
+        '''
+        return y
+
+def TVG(data, Range, c, fs):
+
+    VGA_Gres = 50 # 50dB per volt
+    ## LO gain mode: G = 50 dB/V * Vgain - 6.50dB
+    ## HI gain mode: G = 50 dB/V * Vgain + 5.5
+        # VgainLO = (G+6.5) / 50
+        # VgainHI = (G-5.5) / 50
+
+    #c = 1500 ## Sound speed in water
+    resolution = 1.214/1024 ## 10 bit DAC Vrange = 0-1.214V
+
+    #times = np.arange(0, Range*2.0/c, 1/fs, dtype=np.float64)
+    #times = np.arange(0, Range/c, 1/fs, dtype=np.float64)
+    times = np.linspace(0,Range/c, len(data))
+
+    ranges = c*times
+    gainArr = np.zeros((len(ranges)))
+
+    for i, val in enumerate(ranges):
+        if ranges[i] < 1:
+            ranges[i] = 20.0*np.log10(1)#1
+        else:
+            gainArr[i] = 20.0*np.log10(ranges[i])
+
+    #gainArr = G_pre + 20*np.log10(ranges)
+
+    #plt.plot(ranges, gainArr, color='red', alpha=0.5)
+    data_gained = gainArr+20.0*np.log10(data)
+    '''
+    plt.plot(ranges, data_gained, color='red')
+    test = 10**(gainArr/20)
+    test = 20*np.log10(data*test)
+    plt.plot(ranges, test, color='orange')
+    plt.show()
+    fig1, ax1 = plt.subplots(1)
+    ax1.plot(ranges, 20.0*np.log10(data))
+    plt.show()
+    quit()
+    '''
+
+
+    return data_gained#10**(data_gained/20)
 
 def gen_mfilt(fc, BW, pulseLength, fs):
     ### Matched filter w/ Hamming window ###

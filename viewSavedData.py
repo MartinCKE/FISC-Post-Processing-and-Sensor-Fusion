@@ -11,6 +11,8 @@ import argparse
 #Importing other scripts
 import fusePlot
 import acousticProcessing
+import profilePlot
+import IMU
 
 
 matplotlib.use('TkAgg')
@@ -471,11 +473,18 @@ def move_figure(f, x, y):
         # You can also use window.setGeometry
         f.canvas.manager.window.move(x, y)
 
-def loadFileNames(startTime, stopTime, sectorFocus):
-    if sectorFocus:
-        directory = os.getcwd()+'/Data/SectorFocus/16-02-22'
+def loadFileNames(startTime, stopTime, sectorFocus, ace):
+
+    if ace:
+        if sectorFocus:
+            directory = os.getcwd()+'/Data/SectorFocus/11-03-22'
+        else:
+            directory = os.getcwd()+'/Data/11-03-22'
     else:
-        directory = os.getcwd()+'/Data'
+        if sectorFocus:
+            directory = os.getcwd()+'/Data/SectorFocus/16-02-22'
+        else:
+            directory = os.getcwd()+'/Data/16-02-22'
 
     files = []
     hhmmss_list = []
@@ -505,10 +514,13 @@ def loadFileNames(startTime, stopTime, sectorFocus):
 
     return files
 
-def loadVideoFileNames(startTime, stopTime):
+def loadVideoFileNames(startTime, stopTime, ace):
     videofiles = []
     hhmmss_list = []
-    directory = os.getcwd()+'/Data/cam_recordings'
+    if args.ace:
+        directory = os.getcwd()+'/Data/cam_recordings/secondTest'
+    else:
+        directory = os.getcwd()+'/Data/cam_recordings/firstTest'
 
     #hhmm = str(re.findall('[0-9]{2}-[0-9]{2}', filename))[2:-2]
     #hhmmss = str(re.findall('[0-9]{2}-[0-9]{2}-[0-9]{2}', filename))[2:-2]
@@ -571,23 +583,68 @@ if __name__ == '__main__':
         dest="showPlots",
         help="Show plots or not",
     )
+    parser.add_argument(
+        "--o2temp",
+        action="store_true",
+        dest="o2temp",
+        help="Parse and plot O2 + Temp data",
+    )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        dest="profile",
+        help="Parse and plot SV, O2 + Temp data as function of depth",
+    )
+    parser.add_argument(
+        "--imu",
+        action="store_true",
+        dest="imu",
+        help="Parse and plot IMU data over time",
+    )
+    parser.add_argument(
+        "--ace",
+        action="store_true",
+        dest="ace",
+        help="Add this for 2nd field test data (Sintef Ace, Frøya)",
+    )
     args = parser.parse_args()
 
-    rx_files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus)
 
-    videoFiles = loadVideoFileNames(args.startTime, args.stopTime)
 
-    #print("RX files:", rx_files)
-    print("Video files:", videoFiles)
 
-    if args.syncPlot:
+    if args.syncPlot and not args.o2temp:
+        rx_files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus, args.ace)
+
+        videoFiles = loadVideoFileNames(args.startTime, args.stopTime, args.ace)
         for video in videoFiles:
             print("Current video:", video)
             fusePlot.syncPlot_timeStampFromFrames(video, rx_files, sectorFocus=args.sectorFocus, \
                                                 savePlots=args.savePlots, showPlots=args.showPlots)
 
         quit()
+    if args.o2temp:
+        if args.profile:
+            profilePlot.SVProfilePlot(args.ace)
+            ## Depth measurements performed in this time window
+            files = loadFileNames('09:47', '09:51', args.sectorFocus)
+            #for file in files:
+            #    print(file)#print(files)
+            profilePlot.profilePlot(files)
+        else:
+            files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus)
+            for file in files:
+                print(file)#print(files)
+            profilePlot.O2TempPlot(files)
+    if args.imu:
+        files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus)
+        IMU.plotData(files)
 
+
+
+
+
+
+    quit()
     #fig3, ax3 = plt.subplots(1)
 
     #fig, (ax1, ax2) = plt.subplots(2, figsize=(9,6))

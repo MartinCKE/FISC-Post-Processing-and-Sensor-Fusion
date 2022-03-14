@@ -12,55 +12,52 @@ import matplotlib
 from PIL import Image
 import os
 
-
 matplotlib.use('TkAgg')
 
 #Import other scripts
 import acousticProcessing
 
 def get_concat_h_resize(im1, im2, resample=Image.BICUBIC, resize_big_image=True):
-    if im1.height == im2.height:
-        _im1 = im1
-        _im2 = im2
-    elif (((im1.height > im2.height) and resize_big_image) or
-          ((im1.height < im2.height) and not resize_big_image)):
-        _im1 = im1.resize((int(im1.width * im2.height / im1.height), im2.height), resample=resample)
-        _im2 = im2
-    else:
-        _im1 = im1
-        _im2 = im2.resize((int(im2.width * im1.height / im2.height), im1.height), resample=resample)
-    dst = Image.new('RGB', (_im1.width + _im2.width, _im1.height))
-    dst.paste(_im1, (0, 0))
-    dst.paste(_im2, (_im1.width, 0))
-    return dst
+	if im1.height == im2.height:
+		_im1 = im1
+		_im2 = im2
+	elif (((im1.height > im2.height) and resize_big_image) or
+		  ((im1.height < im2.height) and not resize_big_image)):
+		_im1 = im1.resize((int(im1.width * im2.height / im1.height), im2.height), resample=resample)
+		_im2 = im2
+	else:
+		_im1 = im1
+		_im2 = im2.resize((int(im2.width * im1.height / im2.height), im1.height), resample=resample)
+	dst = Image.new('RGB', (_im1.width + _im2.width, _im1.height))
+	dst.paste(_im1, (0, 0))
+	dst.paste(_im2, (_im1.width, 0))
+	return dst
 
 def get_concat_v_resize(im1, im2, resample=Image.BICUBIC, resize_big_image=True):
-    if im1.width == im2.width:
-        _im1 = im1
-        _im2 = im2
-    elif (((im1.width > im2.width) and resize_big_image) or
-          ((im1.width < im2.width) and not resize_big_image)):
-        _im1 = im1.resize((im2.width, int(im1.height * im2.width / im1.width)), resample=resample)
-        _im2 = im2
-    else:
-        _im1 = im1
-        _im2 = im2.resize((im1.width, int(im2.height * im1.width / im2.width)), resample=resample)
-    dst = Image.new('RGB', (_im1.width, _im1.height + _im2.height))
-    dst.paste(_im1, (0, 0))
-    dst.paste(_im2, (0, _im1.height))
-    return dst
-
-
+	if im1.width == im2.width:
+		_im1 = im1
+		_im2 = im2
+	elif (((im1.width > im2.width) and resize_big_image) or
+		  ((im1.width < im2.width) and not resize_big_image)):
+		_im1 = im1.resize((im2.width, int(im1.height * im2.width / im1.width)), resample=resample)
+		_im2 = im2
+	else:
+		_im1 = im1
+		_im2 = im2.resize((im1.width, int(im2.height * im1.width / im2.width)), resample=resample)
+	dst = Image.new('RGB', (_im1.width, _im1.height + _im2.height))
+	dst.paste(_im1, (0, 0))
+	dst.paste(_im2, (0, _im1.height))
+	return dst
 
 def move_figure(f, x, y):
-    '''Move figure's upper left corner to pixel (x, y)'''
-    backend = matplotlib.get_backend()
-    if backend == 'TkAgg':
-        f.canvas.manager.window.wm_geometry("+%d+%d" % (x, y))
-    elif backend == 'WXAgg':
-        f.canvas.manager.window.SetPosition((x, y))
-    else:
-        f.canvas.manager.window.move(x, y)
+	'''Move figure's upper left corner to pixel (x, y)'''
+	backend = matplotlib.get_backend()
+	if backend == 'TkAgg':
+		f.canvas.manager.window.wm_geometry("+%d+%d" % (x, y))
+	elif backend == 'WXAgg':
+		f.canvas.manager.window.SetPosition((x, y))
+	else:
+		f.canvas.manager.window.move(x, y)
 
 def inclinationHeading(imuData):
 	roll = imuData[0]
@@ -134,31 +131,53 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 
 	print("fc:", int(fc), "BW:", int(BW), "fs:", int(fs), \
 		"plen (us):", int(pulseLength*1e6), "range:", Range, "c:", c, "Downsample step:", downSampleStep)
+	print("Sample Time:", SampleTime, "Nsamples:", nSamples)
 
-	import scipy
+
 
 	mfilt = acousticProcessing.gen_mfilt(fc, BW, pulseLength, fs)
 
+
 	'''
-	tfilt = np.linspace(0, pulseLength, int(fs*pulseLength))
-	mfilt2 = scipy.signal.chirp(tfilt, int(fc-BW/2), tfilt[-1], int(fc+BW/2),method='linear',phi=90)
-	mfilt2 = mfilt2*np.hamming(len(mfilt2))*1.85
+	#import scipy
+	#tfilt = np.linspace(0, pulseLength, int(fs*pulseLength))
+	mfilt2 = acousticProcessing.gen_mfilt(fc, BW, pulseLength, fs)#scipy.signal.chirp(tfilt, int(fc-BW/2), tfilt[-1], int(fc+BW/2),method='linear',phi=90)
+	#mfilt2 = mfilt2*np.hamming(len(mfilt2))*1.85
 	CH1_Env2, _ = acousticProcessing.matchedFilter(Sector4_data, Sector4_data, mfilt2, downSampleStep)
-	CH1_Env2[0:samplesPerPulse] = 0
-	axs.plot(rangeVecShort, CH1_Env2, label=rxFile_timeStamp, color='black', alpha=0.5)
-	#fig, ax = plt.subplots(1)
+	#CH1_Env2[0:samplesPerPulse] = 0
+	#axs.plot(rangeVecShort, CH1_Env2, label=rxFile_timeStamp, color='black', alpha=0.5)
+
+	#axs.plot(rangeVecShort, Sector4_data, label=rxFile_timeStamp, color='red', alpha=0.5)
+	#axs.plot(rangeVecShort, Sector4_data, label='gained', color='black', alpha=0.5)
+	fig, ax = plt.subplots(1)
 	#freqs=np.linspace(0,fs*2, len(mfilt))
-	#ax.plot(freqs, 20*np.log10(np.fft.fft(mfilt)))
+	#ax.plot(freqs, 20*np.log10(np.fft.fft(Sector4_data[0:samplesPerPulse])))
 	#ax.plot(freqs, 20*np.log10(np.fft.fft(mfilt2)), color='red')
-	#plt.show()
-	#quit()
+	quit()
+	'''
 
 
+
+	'''
+	filtered = acousticProcessing.butterworth_BP_filter(Sector4_data, 98802, 158802, fs, 10)
+	mfilt = Sector4_data[0:samplesPerPulse]
+	mfiltfft = np.fft.rfft(mfilt)
+
+	n = mfiltfft.size
+	freqs = np.fft.rfftfreq(n*2-1, 1/fs)
+	#freqs2=np.linspace(0,fs/2, len(mfiltfft))
+	plt.plot(freqs, np.abs(mfiltfft), alpha=0.5)
+	#plt.plot(freqs2, np.abs(mfiltfft), color='black', alpha=0.5)
+	plt.show()
+	quit()
 	'''
 
 	CH1_Env, _ = acousticProcessing.matchedFilter(Sector4_data, Sector4_data, mfilt, downSampleStep)
+	CH1_Env_TVG = acousticProcessing.TVG(CH1_Env, Range, c, fs)
 	CH1_Env[0:samplesPerPulse] = 0 ## To remove tx pulse noise
-	axs.plot(rangeVecShort, CH1_Env, label=rxFile_timeStamp, color='red', alpha=0.5)
+	CH1_Env_TVG[0:samplesPerPulse] = 0 ## To remove tx pulse noise
+	#axs.plot(rangeVecShort, CH1_Env_TVG, label=rxFile_timeStamp, color='red', alpha=0.5)
+	#axs.plot(rangeVecShort, CH1_Env, label=rxFile_timeStamp, color='red', alpha=0.5)
 
 	#CH1_peaks_idx, CH1_noise, CH1_detections, CH1_thresholdArr = acousticProcessing.peakDetect(CH1_Env, num_train=6, num_guard=2, rate_fa=5e-3)
 
@@ -168,7 +187,10 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 	axs.clear()
 	#plt.subplots(211)
 	#ax2[0].plot(rangeVec, CH1_Samples, label='Signal from '+channelArray[2*(zone-1)][0])
-	axs.plot(rangeVecShort, CH1_Env, label=rxFile_timeStamp)
+	#testax =
+	axs.plot(rangeVecShort, 20*np.log10(CH1_Env), label=rxFile_timeStamp)
+	axs.plot(rangeVecShort, CH1_Env_TVG, label=rxFile_timeStamp, color='black')
+	#axs.plot(rangeVecShort, CH1_Env, label=rxFile_timeStamp)
 	axs.set_title('Replica Correlator output')
 	axs.set_xlabel('Range')
 	axs.grid(b=True, which="major", color="black", linestyle="-", alpha=0.5)
@@ -183,14 +205,13 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 
 	if kwargs.get('showPlots'):
 
-
 		plt.draw()
 		frame_s = cv2.resize(frame, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_AREA)
 		cv2.imshow(video_timeStamp, frame_s)
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			quit()
 
-		plt.pause(0.5)
+		plt.pause(2)
 
 	if kwargs.get("savePlots"):
 		video_timeStamp = video_timeStamp.replace(":", ".")
@@ -226,22 +247,37 @@ def syncPlot_timeStampFromFrames(videoFile, all_rx_files, **kwargs):
 
 	startTime, endTime = parseVideoTime(videoFile)
 	print("Start time:", startTime, "End time:", endTime)
-
+	
 	rxFilesInVideo = []
 	rxFiles_timeStamps = []
 	for rx_file in all_rx_files:
-		hhmmss = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}', rx_file))[2:-2]
-		if startTime <= hhmmss <= endTime:
-			### Only capturing RX files acquired during current video ###
+		try:
+			hhmmssff = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{5}', rx_file))[2:-2]
+			if startTime <= hhmmssff <= endTime:
+				### Only capturing RX files acquired during current video ###
 
-			rxFilesInVideo.append(rx_file)
-			#print("Added file:", rx_file)
-			rxFile_timeStamp = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}.?[0-9]{5}', rx_file))[2:-2]
-			rxFiles_timeStamps.append(datetime.datetime.strptime(rxFile_timeStamp, '%H:%M:%S.%f'))
-			continue
+				rxFilesInVideo.append(rx_file)
+				#print("Added file:", rx_file)
+				rxFile_timeStamp = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}.?[0-9]{5}', rx_file))[2:-2]
+				rxFiles_timeStamps.append(datetime.datetime.strptime(rxFile_timeStamp, '%H:%M:%S.%f'))
+				continue
 
-		elif hhmmss > endTime:
-			break
+			elif hhmmss > endTime:
+				break
+
+		except:
+			hhmmss = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}', rx_file))[2:-2]
+			if startTime <= hhmmss <= endTime:
+				### Only capturing RX files acquired during current video ###
+
+				rxFilesInVideo.append(rx_file)
+				#print("Added file:", rx_file)
+				rxFile_timeStamp = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}.?[0-9]{5}', rx_file))[2:-2]
+				rxFiles_timeStamps.append(datetime.datetime.strptime(rxFile_timeStamp, '%H:%M:%S.%f'))
+				continue
+
+			elif hhmmss > endTime:
+				break
 
 	if len(rxFilesInVideo) == 0:
 		return
@@ -448,11 +484,11 @@ def OCR_fetchTimeStamp(videoFile):
 				#print("Took:", time.time()-start)
 			if cv2.waitKey(25) & 0xFF == ord('q'):
 				break
-	    # Write the frame into the file 'output.avi'
-	    #out.write(frame)
+		# Write the frame into the file 'output.avi'
+		#out.write(frame)
 
-	    # Display the resulting frame
-	    #cv2.imshow('frame',frame)
+		# Display the resulting frame
+		#cv2.imshow('frame',frame)
 
 
 	  # Break the loop
