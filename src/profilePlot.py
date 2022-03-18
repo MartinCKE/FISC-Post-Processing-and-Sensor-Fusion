@@ -62,8 +62,10 @@ def profilePlot(files, ace):
         temps.append(float(dataArr[-1]))
     #quit()
     fig2, (ax1, ax2) = plt.subplots(1,2,sharey=True)
-
+    ax1.plot(O2S, color='red')
+    plt.show()
     O2S_filtered = butterworth_LP_filter(O2S, cutoff=2, fs=10, order=2)
+    
     if ace:
         temps_filtered = butterworth_LP_filter(temps, cutoff=2, fs=20, order=2)
     else:
