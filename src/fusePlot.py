@@ -1,7 +1,7 @@
 # Import required packages
 import cv2
-import pytesseract
-import tesserocr
+#import pytesseract
+#import tesserocr
 import time
 from PIL import Image
 import numpy as np
