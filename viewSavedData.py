@@ -9,10 +9,10 @@ from datetime import datetime
 import argparse
 
 #Importing other scripts
-import fusePlot
-import acousticProcessing
-import profilePlot
-import IMU
+from src.fusePlot import syncPlot_timeStampFromFrames
+from tools.acousticProcessing import *
+from src.profilePlot import SVProfilePlot, profilePlot
+from src.IMU import *
 
 
 matplotlib.use('TkAgg')
@@ -155,10 +155,10 @@ def colorMapping(CH1_data, CH2_data):
 
 
 def RX_polarPlot_OLD(CH1_Intensity, CH2_Intensity, zone, heading, CH1_Det, CH2_Det):
-    ''' Plots the received echo intensities on a polar plot
+    ''' Okei seriøst det her må du fiks når du får tid
     '''
     global rangeLabels, rangeTicks
-    sector = zone*2-1
+    sector = zone*2-1 ## TEST-VALUE, COMPARE MODULUS TO TRUE ZONE VALUE
 
     for rangeVal in range(0, nBins):
         colorMap[rangeVal, sector+1] = CH1_Intensity[rangeVal]
@@ -413,54 +413,6 @@ def RX_polarPlot_SectorFocus(CH1_Intensity, CH2_Intensity, zone, heading, CH1_De
     axPolar2.scatter(thetaArr_1, rangeBins[CH1_Det_idx], c=CH1_Det[CH1_Det_idx], cmap='RdPu_r', vmin=0, vmax=1) ## Plotting CH1 detections, colormapped
     axPolar2.scatter(thetaArr_2, rangeBins[CH2_Det_idx], c=CH2_Det[CH2_Det_idx], cmap='RdPu_r', vmin=0, vmax=1) ## Plotting CH2 detections, colormapped
 
-def Hilbert(CH1_Data, CH2_Data, downSampleStep):
-    ''' Does basic frequency-domain analysis
-        as well as downsampling the envelope time signal for
-        making plotting faster. Will be used in more technical
-        signal analysis later on.
-    '''
-    ### Hilbert transform on signal ###
-    CH1_Hilb = scipy.signal.hilbert(CH1_Data)
-    CH2_Hilb = scipy.signal.hilbert(CH2_Data)
-
-    ### Acquiring time-domain envelope signal and downsampling it ###
-    CH1_Env = abs(CH1_Hilb)
-    CH1_EnvShort = CH1_Env[0:len(CH1_Env):downSampleStep]
-    CH2_Env = abs(CH2_Hilb)
-    CH2_EnvShort = CH2_Env[0:len(CH2_Env):downSampleStep]
-
-    ### Get phase of signal ##
-    CH1_Phase = np.unwrap(np.angle(CH1_Hilb))
-    CH2_Phase = np.unwrap(np.angle(CH2_Hilb))
-
-    ### Acquiring time domain "envelope" of frequency content ###
-    CH1_Freq = np.diff(CH1_Phase) / (2*np.pi) * fs
-    CH2_Freq = np.diff(CH2_Phase) / (2*np.pi) * fs
-
-
-    return CH1_EnvShort, CH2_EnvShort, CH1_Freq, CH2_Freq
-
-def matchedFilter(CH1_data, CH2_data, downSampleStep):
-    #print("LEN BEFORE:", len(CH1_data))
-    CH1_corr = scipy.signal.correlate(CH1_data, mfilt, mode='same', method='fft')
-    CH2_corr = scipy.signal.correlate(CH2_data, mfilt, mode='same', method='fft')
-
-    CH1_Env = (abs(scipy.signal.hilbert(CH1_corr)))
-    CH2_Env = (abs(scipy.signal.hilbert(CH2_corr)))#20*np.log10
-
-    CH1_Env = CH1_Env[0:len(tVec)]
-    CH2_Env = CH2_Env[0:len(tVec)]
-    #fig, ax5 = plt.subplots(1)
-    #ax5.plot(CH1_Env)
-    #plt.show()
-    #print("LEN AFTER:", len(CH1_Env))
-
-    CH1_EnvShort = CH1_Env[0:len(CH1_Env):downSampleStep]
-    CH2_EnvShort = CH2_Env[0:len(CH2_Env):downSampleStep]
-
-
-    return CH1_Env, CH2_Env
-
 def move_figure(f, x, y):
     """Move figure's upper left corner to pixel (x, y)"""
     backend = matplotlib.get_backend()
@@ -494,31 +446,24 @@ def loadFileNames(startTime, stopTime, sectorFocus, ace):
     for root, dirs, filenames in os.walk(directory, topdown=False):
         for filename in filenames:
             hhmm = str(re.findall('[0-9]{2}:[0-9]{2}', filename))[2:-2] ## To get HH:MM from filename
+            print(hhmm)
             if 'DS' in filename:
                 continue
 
             ## Only add desired files to list
             if startTime <= hhmm <= stopTime and filename.endswith('.npz'):
                 files.append(root+'/'+filename)
-                #print("Added file:", filename)
                 #hhmmss_list.append(hhmmss)
-
-    #hhmmss_list = sort(hhmmss_list)
-    #print(files[0][-18:-4])
-    #quit()
 
     ## Sorting files by time
     files = sorted(files, key=lambda x: x[-18:-4])
-
-    #files = sort(files) ## Sorting by time
-
     return files
 
 def loadVideoFileNames(startTime, stopTime, ace):
     videofiles = []
     hhmmss_list = []
     if args.ace:
-        directory = os.getcwd()+'/Data/cam_recordings/secondTest'
+        directory = os.getcwd()+'/Data/cam_recordings/secondTest/compressed'
     else:
         directory = os.getcwd()+'/Data/cam_recordings/firstTest'
 
@@ -533,9 +478,9 @@ def loadVideoFileNames(startTime, stopTime, ace):
             hhmm = hhmm.replace("-", ":")
             if startTime <= hhmm <= stopTime:
                 videofiles.append(root+'/'+filename)
+                print("video added:", filename)
 
     videofiles = sort(videofiles) ## Sorting by time
-    #print(videofiles)
 
     return videofiles
 
@@ -614,27 +559,29 @@ if __name__ == '__main__':
 
     if args.syncPlot and not args.o2temp:
         rx_files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus, args.ace)
-
         videoFiles = loadVideoFileNames(args.startTime, args.stopTime, args.ace)
+
         for video in videoFiles:
-            print("Current video:", video)
-            fusePlot.syncPlot_timeStampFromFrames(video, rx_files, sectorFocus=args.sectorFocus, \
-                                                savePlots=args.savePlots, showPlots=args.showPlots)
+            syncPlot_timeStampFromFrames(video, rx_files, sectorFocus=args.sectorFocus, \
+                                                savePlots=args.savePlots, showPlots=args.showPlots, ace=args.ace)
 
         quit()
     if args.o2temp:
         if args.profile:
-            profilePlot.SVProfilePlot(args.ace)
+            SVProfilePlot(args.ace)
             ## Depth measurements performed in this time window
-            files = loadFileNames('09:47', '09:51', args.sectorFocus)
+            if args.ace:
+                files = loadFileNames('12:50', '13:00', False, args.ace)
+            else:
+                files = loadFileNames('09:47', '09:51', args.sectorFocus, args.ace)
             #for file in files:
             #    print(file)#print(files)
-            profilePlot.profilePlot(files)
+            profilePlot(files, args.ace)
         else:
             files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus)
             for file in files:
                 print(file)#print(files)
-            profilePlot.O2TempPlot(files)
+            O2TempPlot(files)
     if args.imu:
         files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus)
         IMU.plotData(files)
