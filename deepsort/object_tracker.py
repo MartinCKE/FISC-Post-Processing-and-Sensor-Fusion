@@ -16,6 +16,9 @@ from PIL import Image
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import re
+import datetime
+#import pandas as pd
 from tensorflow.compat.v1 import ConfigProto
 from tensorflow.compat.v1 import InteractiveSession
 # deep sort imports
@@ -38,12 +41,46 @@ flags.DEFINE_boolean('dont_show', False, 'dont show video output')
 flags.DEFINE_boolean('info', False, 'show detailed info of tracked objects')
 flags.DEFINE_boolean('count', False, 'count objects being tracked on screen')
 
+
+flags.DEFINE_list('SF_timestamps',['13:12:06.25300', '13:12:06.55941'], 'RX-file timestamps' ) ## timestamps of RX files 
+
+def parseVideoTime(filename):
+    YYMMDDhhmmssff = str(re.findall('[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}.[0-9]{6}', filename))[2:-2]
+    print("kbhk", YYMMDDhhmmssff)
+    startTime = datetime.datetime.strptime(YYMMDDhhmmssff, '%Y-%m-%d-%H-%M-%S.%f')
+    endTime = startTime + datetime.timedelta(seconds=15)
+    startTime = str(startTime)[-15:]
+    endTime = str(endTime)[-15:]# +'.0'
+  
+  
+    return startTime, endTime
+
+
 def main(_argv):
+    ## FISC-related ### 
+    match = False
+    trackerArray = [['RX Timestamp', 'Tracked ID', 'BBox Coords (xmin, ymin, xmax, ymax)']]
+    '''
+    print('\n')
+    print("hola", FLAGS.weights)
+    test = np.array((FLAGS.SF_timestamps), dtype='str')
+    print("test", test)
+    print(len(FLAGS.SF_timestamps))
+    for val in FLAGS.SF_timestamps:
+        print(val)
+        val.strip(".")
+        print(val)
+    quit()
+    '''
+    ##
+    
+
     # Definition of the parameters
     max_cosine_distance = 0.4
     nn_budget = None
     nms_max_overlap = 1.0
-
+   
+    
     # initialize deep sort
     model_filename = 'model_data/mars-small128.pb'
     encoder = gdet.create_box_encoder(model_filename, batch_size=1)
@@ -80,18 +117,30 @@ def main(_argv):
         vid = cv2.VideoCapture(video_path)
 
     out = None
+    
 
     # get video ready to save locally if flag is set
     if FLAGS.output:
         # by default VideoCapture returns float instead of int
         width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = int(vid.get(cv2.CAP_PROP_FPS))
         codec = cv2.VideoWriter_fourcc(*FLAGS.output_format)
         #out = cv2.VideoWriter(FLAGS.output, codec, fps, (width, height))
         out = cv2.VideoWriter(FLAGS.output, cv2.VideoWriter_fourcc('m','p','4','v'), fps, (width, height))
     frame_num = 0
+    vid_fps = int(vid.get(cv2.CAP_PROP_FPS))
+    
+    ## fetching start/end time of video ##
+    startTime, endTime = parseVideoTime(video_path)
+    timestamps = [startTime]
+    match = False
+    print("Start time:", startTime, "End time:", endTime)
+    rxfile_counter = 0
+    
+  
+    
     # while video is running
+    
     while True:
         return_value, frame = vid.read()
         if return_value:
@@ -107,6 +156,7 @@ def main(_argv):
         image_data = image_data / 255.
         image_data = image_data[np.newaxis, ...].astype(np.float32)
         start_time = time.time()
+        
 
         # run detections on tflite if flag is set
         if FLAGS.framework == 'tflite':
@@ -159,7 +209,7 @@ def main(_argv):
 
         # by default allow all classes in .names file
         allowed_classes = list(class_names.values())
-
+        
         # custom allowed classes (uncomment line below to customize tracker for only people)
         #allowed_classes = ['person']
 
@@ -196,26 +246,30 @@ def main(_argv):
         scores = np.array([d.confidence for d in detections])
         classes = np.array([d.class_name for d in detections])
         indices = preprocessing.non_max_suppression(boxs, classes, nms_max_overlap, scores)
-        detections = [detections[i] for i in indices]
+        detections = [detections[i] for i in indices]       
 
         # Call the tracker
         tracker.predict()
         tracker.update(detections)
+        
+        ## reformat timestamp, temporary fix
+        timestamps[-1] = datetime.datetime.strptime(timestamps[-1], '%H:%M:%S.%f')
+        curr_rx_timestamp = datetime.datetime.strptime(FLAGS.SF_timestamps[rxfile_counter][1:-1], '%H:%M:%S.%f')
 
         # update tracks
         for track in tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
-                continue
+                continue 
             bbox = track.to_tlbr()
             class_name = track.get_class()
-
+            
         # draw bbox on screen
             color = colors[int(track.track_id) % len(colors)]
             color = [i * 255 for i in color]
             cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), color, 2)
             cv2.rectangle(frame, (int(bbox[0]), int(bbox[1]-30)), (int(bbox[0])+(len(class_name)+len(str(track.track_id)))*17, int(bbox[1])), color, -1)
             cv2.putText(frame, class_name + "-" + str(track.track_id),(int(bbox[0]), int(bbox[1]-10)),0, 0.75, (255,255,255),2)
-        ## Draw center line, not working yet ##
+        ## Draw center dot  
             x_center = bbox[0] + (bbox[2]-bbox[0])/2
             y_center = bbox[1] + (bbox[3]-bbox[1])/2
             center = (int(x_center),int(y_center))
@@ -224,16 +278,54 @@ def main(_argv):
         # if enable info flag then print details about each track
             if FLAGS.info:
                 print("Tracker ID: {}, Class: {},  BBox Coords (xmin, ymin, xmax, ymax): {}".format(str(track.track_id), class_name, (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))))
-            #quit()
+                
+                
+            ### Checking if timestamp of video is matched to acoustic sample ###
+
+
+            print("vid timestamp:", timestamps[-1])
+            print("rx timestamp:", FLAGS.SF_timestamps[rxfile_counter]) 
+            
+            #input("Press enter to continue to next frame")
+            
+            #time.sleep(0.2)
+            if abs(curr_rx_timestamp - timestamps[-1]) < datetime.timedelta(milliseconds=20):
+                print("Match with:", FLAGS.SF_timestamps[rxfile_counter], "and", timestamps[-1])
+                trackerInfo = FLAGS.SF_timestamps[rxfile_counter], int(track.track_id), int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+                trackerArray.append(trackerInfo)
+                match = True
+            print(timestamps[-1] - curr_rx_timestamp)
+            
+        if (timestamps[-1] - curr_rx_timestamp) > datetime.timedelta(milliseconds=100):
+            print("video timestamp:", timestamps[-1])
+            print("rx timestamp:", curr_rx_timestamp)
+            rxfile_counter += 1
+            input("vent no litt")
+ 	
+        if match:
+            rxfile_counter += 1 ## Incrementing counter 
+            match = False
+            
+            if rxfile_counter == len(FLAGS.SF_timestamps):
+                print('All RX files have been checked. Exporting to file and exiting.')
+                input('Press enter to continue to next video')
+                vid_filename = video_path[-30::]
+                np.savetxt(vid_filename+'.csv', trackerArray, delimiter=',', fmt='%s')
+                break
+
+        next_frame_timestamp = timestamps[-1] + datetime.timedelta(seconds=1/vid_fps)
+        timestamps.append(str(next_frame_timestamp)[-15:])
+        
+        
         # calculate frames per second of running detections
         fps = 1.0 / (time.time() - start_time)
         print("FPS: %.2f" % fps)
         result = np.asarray(frame)
         result = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
+         
         if not FLAGS.dont_show:
             cv2.imshow("Output Video", result)
-
+        
         # if output flag is set, save video file
         if FLAGS.output:
             out.write(result)

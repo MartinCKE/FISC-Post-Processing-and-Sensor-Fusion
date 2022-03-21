@@ -429,34 +429,40 @@ def loadFileNames(startTime, stopTime, sectorFocus, ace):
 
     if ace:
         if sectorFocus:
-            directory = os.getcwd()+'/Data/SectorFocus/11-03-22'
+            directory = os.getcwd()+'/data/SectorFocus/11-03-22'
         else:
-            directory = os.getcwd()+'/Data/11-03-22'
+            directory = os.getcwd()+'/data/11-03-22'
     else:
         if sectorFocus:
-            directory = os.getcwd()+'/Data/SectorFocus/16-02-22'
+            directory = os.getcwd()+'/data/SectorFocus/16-02-22'
         else:
-            directory = os.getcwd()+'/Data/16-02-22'
-
+            directory = os.getcwd()+'/data/16-02-22'
+ 
     files = []
     hhmmss_list = []
 
     #hhmmss = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}', filename))[2:-2]
-
+    
     for root, dirs, filenames in os.walk(directory, topdown=False):
         for filename in filenames:
+            if '' in filename:
+                filename = filename.replace("", ":")
             hhmm = str(re.findall('[0-9]{2}:[0-9]{2}', filename))[2:-2] ## To get HH:MM from filename
-            print(hhmm)
+            #print(hhmm)
+            #print(directory)
+            #print(filename)
             if 'DS' in filename:
                 continue
 
             ## Only add desired files to list
             if startTime <= hhmm <= stopTime and filename.endswith('.npz'):
                 files.append(root+'/'+filename)
+                print("added file:", filename)
                 #hhmmss_list.append(hhmmss)
 
     ## Sorting files by time
     files = sorted(files, key=lambda x: x[-18:-4])
+
     return files
 
 def loadVideoFileNames(startTime, stopTime, ace):
@@ -575,7 +581,7 @@ if __name__ == '__main__':
             else:
                 files = loadFileNames('09:47', '09:51', args.sectorFocus, args.ace)
             #for file in files:
-            #    print(file)#print(files)
+            #    print(file)
             profilePlot(files, args.ace)
         else:
             files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus)

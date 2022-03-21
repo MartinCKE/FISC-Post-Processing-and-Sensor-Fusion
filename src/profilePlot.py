@@ -44,6 +44,7 @@ def profilePlot(files, ace):
     temps = []
     O2S = []
     i= 0
+   
     for file in files:
         data=np.load(file, allow_pickle=True)
         O2Data = data['O2']
@@ -62,15 +63,14 @@ def profilePlot(files, ace):
         temps.append(float(dataArr[-1]))
     #quit()
     fig2, (ax1, ax2) = plt.subplots(1,2,sharey=True)
-    ax1.plot(O2S, color='red')
-    plt.show()
+    
     O2S_filtered = butterworth_LP_filter(O2S, cutoff=2, fs=10, order=2)
     
     if ace:
         temps_filtered = butterworth_LP_filter(temps, cutoff=2, fs=20, order=2)
     else:
         temps_filtered = butterworth_LP_filter(temps, cutoff=2, fs=10, order=2)
-
+    
     ax1.plot(O2S, depths, alpha=0.5)
     ax1.plot(O2S_filtered, depths, color='black', alpha=0.5)
     ax2.plot(temps, depths)
