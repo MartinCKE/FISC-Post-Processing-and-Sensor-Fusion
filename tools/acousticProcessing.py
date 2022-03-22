@@ -4,6 +4,33 @@ import matplotlib.pyplot as plt
 from scipy.signal import butter, sosfilt, sosfreqz, filtfilt
 
 
+def thresholding_algo(y, lag, threshold, influence):
+    signals = np.zeros(len(y))
+    filteredY = np.array(y)
+    avgFilter = [0]*len(y)
+    stdFilter = [0]*len(y)
+    avgFilter[lag - 1] = np.mean(y[0:lag])
+    stdFilter[lag - 1] = np.std(y[0:lag])
+    for i in range(lag, len(y)):
+        if abs(y[i] - avgFilter[i-1]) > threshold * stdFilter [i-1]:
+            if y[i] > avgFilter[i-1]:
+                signals[i] = 1
+            else:
+                signals[i] = -1
+
+            filteredY[i] = influence * y[i] + (1 - influence) * filteredY[i-1]
+            avgFilter[i] = np.mean(filteredY[(i-lag+1):i+1])
+            stdFilter[i] = np.std(filteredY[(i-lag+1):i+1])
+        else:
+            signals[i] = 0
+            filteredY[i] = y[i]
+            avgFilter[i] = np.mean(filteredY[(i-lag+1):i+1])
+            stdFilter[i] = np.std(filteredY[(i-lag+1):i+1])
+
+    return dict(signals = np.asarray(signals),
+                avgFilter = np.asarray(avgFilter),
+                stdFilter = np.asarray(stdFilter))
+
 def butterworth_LP_filter(data, cutoff, fs, order):
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
@@ -73,7 +100,7 @@ def TVG(data, Range, c, fs):
     '''
 
 
-    return data_gained#*10**(data_gained/20)
+    return data_gained*10**(data_gained/20)
 
 def gen_mfilt(fc, BW, pulseLength, fs):
     ### Matched filter w/ Hamming window ###
@@ -82,6 +109,7 @@ def gen_mfilt(fc, BW, pulseLength, fs):
     mfilt = mfilt*np.hamming(len(mfilt))*1.85
 
     return mfilt
+
 def normalizeData(data):
     if not np.all((data == 0)):
         return (data - np.min(data)) / (np.max(data) - np.min(data))
@@ -155,15 +183,15 @@ def peakDetect(data, num_train=6, num_guard=2, rate_fa=1e-3):
 
     detectorarr = np.log10(data/peaks)
 
-    fig, ax = plt.subplots(1)
-    ax.plot(data, color='red', label='data', alpha=0.5)
-    ax.plot(noiseArr, color='black', label='noise', alpha=0.5)
-    ax.plot(peaks, color='magenta', label='peaks', alpha=0.5)
-    ax.plot(thresholdArr, color='blue', label='threshold', alpha=0.5)
-    ax.plot(detectorarr, 'rD')
-    print(peak_idx)
-    plt.show()
-    quit()
+    #fig, ax = plt.subplots(1)
+    #ax.plot(data, color='red', label='data', alpha=0.5)
+    #ax.plot(noiseArr, color='black', label='noise', alpha=0.5)
+    #ax.plot(peaks, color='magenta', label='peaks', alpha=0.5)
+    #ax.plot(thresholdArr, color='blue', label='threshold', alpha=0.5)
+    #ax.plot(detectorarr, color='black', label='detectorarr')
+    #plt.legend()
+    #plt.show()
+    #quit()
 
 
     return peak_idx, noiseArr, detectorarr, thresholdArr

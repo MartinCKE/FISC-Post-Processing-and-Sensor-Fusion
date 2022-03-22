@@ -44,7 +44,7 @@ def profilePlot(files, ace):
     temps = []
     O2S = []
     i= 0
-   
+
     for file in files:
         data=np.load(file, allow_pickle=True)
         O2Data = data['O2']
@@ -63,17 +63,17 @@ def profilePlot(files, ace):
         temps.append(float(dataArr[-1]))
     #quit()
     fig2, (ax1, ax2) = plt.subplots(1,2,sharey=True)
-    
+
     O2S_filtered = butterworth_LP_filter(O2S, cutoff=2, fs=10, order=2)
-    
+
     if ace:
         temps_filtered = butterworth_LP_filter(temps, cutoff=2, fs=20, order=2)
     else:
         temps_filtered = butterworth_LP_filter(temps, cutoff=2, fs=10, order=2)
-    
-    ax1.plot(O2S, depths, alpha=0.5)
+
+    #ax1.plot(O2S, depths, alpha=0.5)
     ax1.plot(O2S_filtered, depths, color='black', alpha=0.5)
-    ax2.plot(temps, depths)
+    #ax2.plot(temps, depths)
     ax2.plot(temps_filtered, depths, color='black', alpha=0.5)
     plt.gca().invert_yaxis()
     #plt.locator_params(axis='y', nbins=6)
@@ -85,10 +85,14 @@ def profilePlot(files, ace):
     ax1.set_title('O2 Saturation Profile')
     ax1.set_xlabel('O2 Saturation [%]')
     ax2.set_title('Water Temperature Profile')
-    ax2.set_xlabel('Water Temprature [C$^\circ$]')
+    ax2.set_xlabel('Water Temperature [C$^\circ$]')
     ax1.set_ylabel('Depth [m]')
     ax1.grid()
     ax2.grid()
+    if ace:
+        plt.suptitle('Profile Measurements at Rataren 2')
+    else:
+        plt.suptitle('Profile Measurements at Sinkaberg Hansen (Rørvik)')
 
     plt.show()
     quit()

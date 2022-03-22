@@ -15,7 +15,8 @@ import os
 matplotlib.use('TkAgg')
 
 #Import from other scripts
-from tools.acousticProcessing import gen_mfilt, matchedFilter, colorMapping, TVG, peakDetect, normalizeData
+from tools.acousticProcessing import gen_mfilt, matchedFilter, colorMapping, TVG, peakDetect, normalizeData, thresholding_algo
+
 
 def get_concat_h_resize(im1, im2, resample=Image.BICUBIC, resize_big_image=True):
 	if im1.height == im2.height:
@@ -93,6 +94,8 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 
 
 	data=np.load(rx_file, allow_pickle=True)
+	print(rx_file)
+	quit()
 	acqInfo = data['header']
 	imuData = data['IMU']
 	#O2Data = data['O2']
@@ -183,13 +186,39 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 	CH1_Env, _ = matchedFilter(Sector4_data, Sector4_data, mfilt, downSampleStep)
 	CH1_Env_TVG = TVG(CH1_Env, Range, c, fs)
 	CH1_Env[0:samplesPerPulse] = 0 ## To remove tx pulse noise
-	CH1_Env_TVG[0:samplesPerPulse] = 0 ## To remove tx pulse noise
+	#CH1_Env_TVG[0:samplesPerPulse] = 0 ## To remove tx pulse noise
 	CH1_Env = normalizeData(CH1_Env)
 	#axs.plot(rangeVecShort, CH1_Env_TVG, label=rxFile_timeStamp, color='red', alpha=0.5)
 	#axs.plot(rangeVecShort, CH1_Env, label=rxFile_timeStamp, color='red', alpha=0.5)
 	#print(len(CH1_Env))
 	#quit()
-	CH1_peaks_idx, CH1_noise, CH1_detections, CH1_thresholdArr = peakDetect(CH1_Env, num_train=50, num_guard=10, rate_fa=0.3)
+	CH1_peaks_idx, CH1_noise, CH1_detections, CH1_thresholdArr = peakDetect(CH1_Env, num_train=80, num_guard=10, rate_fa=0.3)
+	'''
+	# Settings: lag = 30, threshold = 5, influence = 0
+	lag = 300
+	threshold = 2.5
+	influence = 0
+
+	# Run algo with settings from above
+	flipped = np.flip(CH1_Env)
+	result = thresholding_algo(flipped, lag=lag, threshold=threshold, influence=influence)
+
+	res = np.flip(result['signals'])
+	avgFilt = np.flip(result['avgFilter'])
+	stdFilt = np.flip(result['stdFilter'])
+
+	print(result['signals'])
+
+	figz, axz = plt.subplots(1)
+	axz.plot(res)
+	axz.plot(CH1_Env)
+	axz.plot(avgFilt)
+	axz.plot(stdFilt)
+	plt.title("hei")
+
+
+	plt.show()
+
 	print(CH1_peaks_idx)
 
 	#quit()
@@ -262,8 +291,7 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 		os.remove(os.getcwd()+'/temp/'+RX_filename)
 
 		#get_concat_v_resize(im1, im2, resize_big_image=False).save('data/dst/pillow_concat_v_resize.jpg')
-
-
+		'''
 
 
 def syncPlot_timeStampFromFrames(videoFile, all_rx_files, **kwargs):
@@ -398,8 +426,6 @@ def syncPlot_timeStampFromFrames(videoFile, all_rx_files, **kwargs):
 	cap.release()
 	plt.close()
 	cv2.destroyAllWindows()
-
-
 
 
 def OCR_fetchTimeStamp(videoFile):
