@@ -15,7 +15,8 @@ import os
 matplotlib.use('TkAgg')
 
 #Import from other scripts
-from tools.acousticProcessing import gen_mfilt, matchedFilter, colorMapping, TVG, peakDetect, normalizeData, thresholding_algo
+from tools.acousticProcessing import gen_mfilt, matchedFilter, colorMapping, TVG, peakDetect, normalizeData, \
+									 thresholding_algo, processEcho
 
 
 def get_concat_h_resize(im1, im2, resample=Image.BICUBIC, resize_big_image=True):
@@ -66,23 +67,27 @@ def inclinationHeading(imuData):
 	heading = imuData[2]
 
 def parseVideoTime(filename):
+	''' Function for parsing video time start and end.
+		Input: Path to video file.
+		Output: Timestamps [startTime, endTime] in string format '%HH-%MM-%SS.%f{5}'
+	'''
 
 	try:
 		YYMMDDhhmmssff = str(re.findall('[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}.[0-9]{5}', filename))[2:-2]
 		print("kbhk", YYMMDDhhmmssff)
-		startTime = datetime.datetime.strptime(YYMMDDhhmmssff, '%Y-%m-%d-%H-%M-%S.%f')
+		startTime = datetime.datetime.strptime(YYMMDDhhmmssff, '%Y-%m-%d-%H-%M-%S.%f') + datetime.timedelta(milliseconds=100)
 
 		endTime = startTime + datetime.timedelta(seconds=15)
-		startTime = str(startTime)[-15:]# + '.0'
-		endTime = str(endTime)[-15:]# +'.0'
+		startTime = str(startTime)[-15:]
+		endTime = str(endTime)[-15:]
 
 	except:
 		YYMMDDhhmmss = str(re.findall('[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}', filename))[2:-2]
 		startTime = datetime.datetime.strptime(YYMMDDhhmmss, '%Y-%m-%d_%H-%M-%S')
 		endTime = startTime + datetime.timedelta(seconds=15)
 
-		startTime = str(startTime)[-8:]# + '.0'
-		endTime = str(endTime)[-8:]# +'.0'
+		startTime = str(startTime)[-8:]
+		endTime = str(endTime)[-8:]
 
 	return startTime, endTime
 
@@ -94,8 +99,7 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 
 
 	data=np.load(rx_file, allow_pickle=True)
-	print(rx_file)
-	quit()
+
 	acqInfo = data['header']
 	imuData = data['IMU']
 	#O2Data = data['O2']
@@ -109,8 +113,12 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 
 
 	#inclination, currentDir = inclinationHeading(imuData)
+	if kwargs.get("ace"):
+		c = 1472.5
+	else:
+		c = 1463 ## Based on profiler data
 
-	c = 1463 ## Based on profiler data
+
 	downSampleStep = 1
 
 	if data['sectorData'].ndim == 1 or kwargs.get("sectorFocus"):
@@ -144,95 +152,21 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 	#	"plen (us):", int(pulseLength*1e6), "range:", Range, "c:", c, "Downsample step:", downSampleStep)
 	#print("Sample Time:", SampleTime, "Nsamples:", nSamples)
 
+	echoEnvelope, peaks = processEcho(Sector4_data, fc, BW, pulseLength, fs, samplesPerPulse)
 
-
-	mfilt = gen_mfilt(fc, BW, pulseLength, fs)
-
-
-	'''
-	#import scipy
-	#tfilt = np.linspace(0, pulseLength, int(fs*pulseLength))
-	mfilt2 = acousticProcessing.gen_mfilt(fc, BW, pulseLength, fs)#scipy.signal.chirp(tfilt, int(fc-BW/2), tfilt[-1], int(fc+BW/2),method='linear',phi=90)
-	#mfilt2 = mfilt2*np.hamming(len(mfilt2))*1.85
-	CH1_Env2, _ = acousticProcessing.matchedFilter(Sector4_data, Sector4_data, mfilt2, downSampleStep)
-	#CH1_Env2[0:samplesPerPulse] = 0
-	#axs.plot(rangeVecShort, CH1_Env2, label=rxFile_timeStamp, color='black', alpha=0.5)
-
-	#axs.plot(rangeVecShort, Sector4_data, label=rxFile_timeStamp, color='red', alpha=0.5)
-	#axs.plot(rangeVecShort, Sector4_data, label='gained', color='black', alpha=0.5)
-	fig, ax = plt.subplots(1)
-	#freqs=np.linspace(0,fs*2, len(mfilt))
-	#ax.plot(freqs, 20*np.log10(np.fft.fft(Sector4_data[0:samplesPerPulse])))
-	#ax.plot(freqs, 20*np.log10(np.fft.fft(mfilt2)), color='red')
-	quit()
-	'''
-
-
-
-	'''
-	filtered = acousticProcessing.butterworth_BP_filter(Sector4_data, 98802, 158802, fs, 10)
-	mfilt = Sector4_data[0:samplesPerPulse]
-	mfiltfft = np.fft.rfft(mfilt)
-
-	n = mfiltfft.size
-	freqs = np.fft.rfftfreq(n*2-1, 1/fs)
-	#freqs2=np.linspace(0,fs/2, len(mfiltfft))
-	plt.plot(freqs, np.abs(mfiltfft), alpha=0.5)
-	#plt.plot(freqs2, np.abs(mfiltfft), color='black', alpha=0.5)
-	plt.show()
-	quit()
-	'''
-
-	CH1_Env, _ = matchedFilter(Sector4_data, Sector4_data, mfilt, downSampleStep)
-	CH1_Env_TVG = TVG(CH1_Env, Range, c, fs)
-	CH1_Env[0:samplesPerPulse] = 0 ## To remove tx pulse noise
-	#CH1_Env_TVG[0:samplesPerPulse] = 0 ## To remove tx pulse noise
-	CH1_Env = normalizeData(CH1_Env)
-	#axs.plot(rangeVecShort, CH1_Env_TVG, label=rxFile_timeStamp, color='red', alpha=0.5)
-	#axs.plot(rangeVecShort, CH1_Env, label=rxFile_timeStamp, color='red', alpha=0.5)
-	#print(len(CH1_Env))
-	#quit()
-	CH1_peaks_idx, CH1_noise, CH1_detections, CH1_thresholdArr = peakDetect(CH1_Env, num_train=80, num_guard=10, rate_fa=0.3)
-	'''
-	# Settings: lag = 30, threshold = 5, influence = 0
-	lag = 300
-	threshold = 2.5
-	influence = 0
-
-	# Run algo with settings from above
-	flipped = np.flip(CH1_Env)
-	result = thresholding_algo(flipped, lag=lag, threshold=threshold, influence=influence)
-
-	res = np.flip(result['signals'])
-	avgFilt = np.flip(result['avgFilter'])
-	stdFilt = np.flip(result['stdFilter'])
-
-	print(result['signals'])
-
-	figz, axz = plt.subplots(1)
-	axz.plot(res)
-	axz.plot(CH1_Env)
-	axz.plot(avgFilt)
-	axz.plot(stdFilt)
-	plt.title("hei")
-
-
-	plt.show()
-
-	print(CH1_peaks_idx)
-
-	#quit()
-	CH1_Intensity, _ = colorMapping(CH1_Env, _)
+	#CH1_Intensity, _ = colorMapping(echoEnvelope, echoEnvelope)
 
 	#CH1_Env[0:samplesPerPulse] = 0.00001
 	axs.clear()
-	#plt.subplots(211)
-	#ax2[0].plot(rangeVec, CH1_Samples, label='Signal from '+channelArray[2*(zone-1)][0])
-	#testax =
+
+	axs.plot(rangeVec, echoEnvelope)#, label='data')
+	#ax.plot(echoData, label='raw data')
+	axs.plot(rangeVecShort[peaks], echoEnvelope[peaks], "x", alpha=0.5, label=rxFile_timeStamp+', BW: '+str(BW))
+	'''
 	axs.plot(rangeVecShort, CH1_Env, label=rxFile_timeStamp+', BW:'+str(BW))
 	axs.plot(rangeVecShort[CH1_peaks_idx], CH1_detections[CH1_peaks_idx], 'rD')
 	#axs.plot(rangeVecShort, CH1_Env_TVG, label=rxFile_timeStamp, color='black')
-
+	'''
 	axs.set_title('Replica Correlator output')
 	axs.set_xlabel('Range')
 	axs.grid(b=True, which="major", color="black", linestyle="-", alpha=0.5)
@@ -243,7 +177,6 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 	axs.legend()
 	#plt.tight_layout()
 	axs.patch.set_facecolor("#edf3f5")
-
 
 	x,y,w,h = 5,5,320,32
 
@@ -262,7 +195,7 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			quit()
 
-		plt.pause(1)
+		plt.pause(2)
 
 	if kwargs.get("savePlots"):
 		video_timeStamp = video_timeStamp.replace(":", ".")
@@ -277,9 +210,11 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 		im1 = Image.open('temp/'+frame_filename)
 		im2 = Image.open('temp/'+RX_filename)
 
-		if kwargs.get("ace"):
+		if kwargs.get("ace") and not kwargs.get("deepsort"):
 			if 'SectorFocus' in rx_file:
 				syncPlotName = 'syncPlot_sectorFocus_2022-03-11_'+rxFile_timeStamp+'.png'
+		elif kwargs.get("ace") and kwargs.get("deepsort"):
+			syncPlotName = 'syncPlot_DeepSORT_sectorFocus_2022-03-11_'+rxFile_timeStamp+'.png'
 		else:
 			if 'SectorFocus' in rx_file:
 				syncPlotName = 'syncPlot_sectorFocus_2022-02-16_'+rxFile_timeStamp+'.png'
@@ -291,7 +226,6 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 		os.remove(os.getcwd()+'/temp/'+RX_filename)
 
 		#get_concat_v_resize(im1, im2, resize_big_image=False).save('data/dst/pillow_concat_v_resize.jpg')
-		'''
 
 
 def syncPlot_timeStampFromFrames(videoFile, all_rx_files, **kwargs):
@@ -304,8 +238,6 @@ def syncPlot_timeStampFromFrames(videoFile, all_rx_files, **kwargs):
 	rxFilesInVideo = []
 	rxFiles_timeStamps = []
 	for rx_file in all_rx_files:
-
-
 		try:
 			hhmmssff = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{5}', rx_file))[2:-2]
 			if startTime <= hhmmssff <= endTime:
@@ -353,7 +285,6 @@ def syncPlot_timeStampFromFrames(videoFile, all_rx_files, **kwargs):
 
 	#timestamps = [datetime.datetime.strptime(startTime, '%H:%M:%S')]
 	timestamps = [startTime]
-
 
 
 	i = 0
