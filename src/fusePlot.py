@@ -19,6 +19,7 @@ from tools.acousticProcessing import gen_mfilt, matchedFilter, colorMapping, TVG
 									 thresholding_algo, processEcho
 
 
+
 def get_concat_h_resize(im1, im2, resample=Image.BICUBIC, resize_big_image=True):
 	if im1.height == im2.height:
 		_im1 = im1
@@ -145,36 +146,42 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 	samplesPerPulse = int(fs*pulseLength)  # How many samples do we get per pulse length
 	tVec = np.linspace(0, SampleTime, nSamples)
 	tVecShort = tVec[0:len(tVec):downSampleStep] # Downsampled time vector for plotting
-	rangeVec = np.linspace(0, Range, len(tVec))
-	rangeVecShort = np.linspace(0, Range, len(tVecShort)).round(decimals=2)
+	plen_d = (c*pulseLength)/2
+	rangeVec = np.linspace(-plen_d, Range, len(tVec))
+	rangeVecShort = np.linspace(-plen_d, Range, len(tVecShort)).round(decimals=2)
 
 	#print("fc:", int(fc), "BW:", int(BW), "fs:", int(fs), \
 	#	"plen (us):", int(pulseLength*1e6), "range:", Range, "c:", c, "Downsample step:", downSampleStep)
 	#print("Sample Time:", SampleTime, "Nsamples:", nSamples)
 
-	echoEnvelope, peaks = processEcho(Sector4_data, fc, BW, pulseLength, fs, samplesPerPulse)
+
+	echoEnvelope, peaks = processEcho(Sector4_data, fc, BW, pulseLength, fs, downSampleStep, samplesPerPulse, 0)
 
 	#CH1_Intensity, _ = colorMapping(echoEnvelope, echoEnvelope)
 
 	#CH1_Env[0:samplesPerPulse] = 0.00001
 	axs.clear()
 
-	axs.plot(rangeVec, echoEnvelope)#, label='data')
+	axs.plot(rangeVec, echoEnvelope, label='TX plen: '+str(pulseLength*10**6)[0:-2]+'$\mu$s, BW: '+str(BW/1000)[0:-2]+'kHz')#, label='data')
+
+
+
 	#ax.plot(echoData, label='raw data')
-	axs.plot(rangeVecShort[peaks], echoEnvelope[peaks], "x", alpha=0.5, label=rxFile_timeStamp+', BW: '+str(BW))
+	#axs.plot(rangeVecShort[peaks], echoEnvelope[peaks], "x", alpha=0.5, label='Detections. TX BW='+str(BW))
 	'''
 	axs.plot(rangeVecShort, CH1_Env, label=rxFile_timeStamp+', BW:'+str(BW))
 	axs.plot(rangeVecShort[CH1_peaks_idx], CH1_detections[CH1_peaks_idx], 'rD')
 	#axs.plot(rangeVecShort, CH1_Env_TVG, label=rxFile_timeStamp, color='black')
 	'''
-	axs.set_title('Replica Correlator output')
-	axs.set_xlabel('Range')
+	axs.set_xlabel("Range [m]")
+	axs.set_ylabel("Matched Filter Output")
+	axs.set_title("Acoustic Data for Ping "+rxFile_timeStamp)# for Fish #"+ID[0][1])
 	axs.grid(b=True, which="major", color="black", linestyle="-", alpha=0.5)
 	#axs.minorticks_on()
 	axs.grid(b=True, which="minor", color="#999999", linestyle="--", alpha=0.2)
 	#plt.style.use("seaborn-notebook")
 	#ax2[0].plot(freqs, CH1_fft, label='Signal from '+channelArray[2*(zone-1)][0])
-	axs.legend()
+	axs.legend(loc='upper right')
 	#plt.tight_layout()
 	axs.patch.set_facecolor("#edf3f5")
 
@@ -185,7 +192,6 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 
 	# Add text
 	cv2.putText(frame, 'Video file: '+video_timeStamp, (x + int(w/50),y + int(h/2)+5), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-	print("SHOULDKJBKASJBGKASBGABG")
 	print("Filename now:", rx_file)
 	if kwargs.get('showPlots'):
 
@@ -195,7 +201,8 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			quit()
 
-		plt.pause(2)
+		#plt.pause(0.2)
+		plt.waitforbuttonpress()
 
 	if kwargs.get("savePlots"):
 		video_timeStamp = video_timeStamp.replace(":", ".")
