@@ -17,6 +17,7 @@ import scipy.signal
 import cv2
 import time
 from PIL import Image
+import faulthandler
 
 
 from viewSavedData import loadFileNames
@@ -136,7 +137,7 @@ def getEchoData(timestamp):
 
 				## Process echo data and fetch matched filter envelope and peaks in signal ##
 				min_idx = int(np.argwhere(rangeVec>1)[0]) ## To ignore detections closer than the set min range
-				echoEnvelope, peaks = processEcho(echoData, fc, BW, pulseLength, fs, downSampleStep, samplesPerPulse, min_idx)
+				echoEnvelope, peaks = processEcho(echoData, fc, BW, pulseLength, fs, 1, samplesPerPulse, min_idx)
 				#fig3, ax3 = plt.subplots(1)
 				#print(len(peaks))
 				#print(len(echoEnvelope))
@@ -402,17 +403,17 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 	trackedArray = np.split(data[ind, :], spp, axis=0)
 
 	## Make plot for acoustic data ##
-	fig, ax = plt.subplots(1, figsize=(10,6))
+	fig, acousticAX = plt.subplots(1)#, figsize=(10,6))
 
 
 	for ID in trackedArray:
 
 		if int(ID[0][1]) not in fusionList_ID:
 			continue
-		if int(ID[0][1]) != 195:
-			continue
+		#if int(ID[0][1]) != 195:
+		#	continue
 
-		ax.clear()
+		acousticAX.clear()
 
 		currID = ID[0][1]
 		print("Current ID:", currID)
@@ -423,7 +424,6 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 
 		## Sorting by timestamp to plot in sequence
 		data_sorted = sorted(ID, key=lambda x: x[0])
-
 
 		## To exclude tracked objects far away from center ##
 		x_threshold_min = 0
@@ -454,7 +454,6 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 			y_center = ymin + (ymax-ymin)/2
 			center = (int(x_center),int(y_center))
 			centerArr.append(center)
-			#cv2.circle(frame, center, 5, color, 5)
 
 
 			## Extracting frame which matches the timestamp ##
@@ -465,7 +464,6 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 			## Visualizing bounding box of current tracked individual in focus ##
 			color = (0,0,255)
 			cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
-			#cv2.rectangle(frame, (xmin, ymin-30), (xmin+(len('Salmon')+len(currID))*17, ymin), color, -1)
 			cv2.putText(frame, 'Salmon' + "-" + currID,(xmin, ymin-10),0, 0.75, (255,255,255),2)
 
 
@@ -479,8 +477,8 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 			echoEnvelope, peaks, rangeVec = getEchoData(timeStamp)
 
 			## Find largest peak ##
+			print("Peaks:", peaks)
 			maxPeak = np.max(echoEnvelope[peaks])
-			#fig, ax = plt.subplots(1)
 
 
 
@@ -491,15 +489,22 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 			#maxPeak_idx = np.argmax(np.argwhere(echoEnvelope[peaks]>1))
 			## Extract distance to peak ##
 			dist = rangeVec[peaks][maxPeak_idx]
-			#ax.plot(echoEnvelope[peaks], label='heu')
-			#ax.plot(peaks, label='peaks')
-			#ax.plot(maxPeak_idx, label='heu')
-			#ax.plot(rangeVec[peaks][maxPeak_idx], maxPeak, "x", alpha=0.5, label='Peak', color='red')
+			#fig, acousticAX = plt.subplots(1)#, figsize=(10,6))
+			#acousticAX.plot(5,4)
+			#plt.show()
+
+			#acousticAX.plot(echoEnvelope[peaks], label='heu')
+			#acousticAX.plot(peaks, label='peaks')
+			#acousticAX.plot(maxPeak_idx, label='heu')
+			#acousticAX.plot(rangeVec[peaks][maxPeak_idx], maxPeak, "x", alpha=0.5, label='Peak', color='red')
 			#plt.legend()
 			#plt.show()
 			#quit()
 
+
+
 			x, y, z = calcCoords(dist, center)
+
 			## Get estimate of size based on distance and bounbind box coords ##
 			length_old, height_old = calcSize(xmin, ymin, xmax, ymax, dist)
 			length, height = calcSize(xmin, ymin, xmax, ymax, z)
@@ -510,22 +515,23 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 			temp_speedEstArr.append([x, y, z, timeStamp])
 			temp_speedEstArr_old.append([dist, center, timeStamp])
 
-			color = next(ax._get_lines.prop_cycler)['color']
-			ax.plot(rangeVec,echoEnvelope, label='ID:'+ID[0][1]+'. Time:'+timeStamp, alpha=0.3, color=color)
-			ax.set_xlabel("Range [m]")
-			ax.set_ylabel("Matched Filter Output")
-			ax.set_title("Acoustic Data for Fish #"+ID[0][1])
+			color = next(acousticAX._get_lines.prop_cycler)['color']
+			acousticAX.plot(rangeVec,echoEnvelope, label='ID:'+ID[0][1]+'. Time:'+timeStamp, alpha=0.3, color=color)
+			acousticAX.set_xlabel("Range [m]")
+			acousticAX.set_ylabel("Matched Filter Output")
+			acousticAX.set_title("Acoustic Data for Fish #"+ID[0][1])
 
-			ax.plot(rangeVec[peaks][maxPeak_idx], maxPeak, "x", alpha=0.5, label='Peak at '+str(rangeVec[peaks][maxPeak_idx])[0:4]+'m used.', color=color)
+			acousticAX.plot(rangeVec[peaks][maxPeak_idx], maxPeak, "x", alpha=0.5, label='Peak at '+str(rangeVec[peaks][maxPeak_idx])[0:4]+'m used.', color=color)
+
 			plt.xlim([0,5])
-
+			plt.draw()
 			plt.pause(0.001)
 
 			if len(temp_speedEstArr) >= 2:
 
-				while len(ax.lines) > 4:
+				while len(acousticAX.lines) > 4:
 					## To only display 2 last acoustic pings which are used in speed esimates ##
-					ax.lines.pop(0)
+					acousticAX.lines.pop(0)
 
 				plt.legend()
 				plt.draw()
@@ -580,7 +586,6 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 
 
 
-
 			cv2.imshow(str(vid_timeStamp), frame)
 
 
@@ -604,7 +609,6 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 
 			if not savePlots:
 				plt.waitforbuttonpress()
-
 
 
 			if (cv2.waitKey(1) & 0xFF) == ord('q'):
@@ -636,6 +640,9 @@ def loadTrackerData(startTime, stopTime):
 
 
 if __name__ == '__main__':
+	faulthandler.disable()
+	faulthandler.enable(all_threads=True)
+
 	parser = argparse.ArgumentParser()
 	parser.add_argument(
 		"--start",
