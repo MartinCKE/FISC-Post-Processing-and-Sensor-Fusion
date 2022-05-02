@@ -139,19 +139,19 @@ def inclination_current(roll, pitch, heading):
 
 	## Find the vertical vector for capsule ##
 	rVec = np.array([cos(heading)*cos(pitch), sin(pitch),sin(heading)*cos(pitch)]) #Roll (forward) vector
-	z = np.array([0,1,0]) #Vertical vector, fixed frame of referecnce
+	z = np.array([0,1,0]) #Vertical vector, fixed
 	sideVec = np.cross(rVec, z) # Side vector, perpendicular to roll vector and vertical vector
 	v = np.cross(sideVec, rVec) # Vertical vector, perpendicular to side (pitch) vector and roll vector
 	vRotation = v*np.cos(roll)+np.cross(rVec,v)*np.sin(roll) # Vertical vector fixed to capsule orientation
 
 	## Find horizontal projection of capsules vertical vector (which points towards water current due to inclination) ##
 	## Then find angle between this vector and "north" from fixed frame of reference ##
-	vRotation_hproj = np.array([vRotation[0], 0, vRotation[2]]) # Horizontal projection of vertical
+	vRotation_hproj = np.array([vRotation[0], 0, vRotation[2]]) # Horizontal projection of vertical vector
 	vRotation_hproj = vRotation_hproj / np.linalg.norm(vRotation_hproj) # To get unit vector
 	currentVec = np.dot(vRotation_hproj, np.array([1,0,0])) # Dot product of current dir vector and north
 	currentAngle = np.rad2deg(np.arccos(currentVec)) # Angle between current vector and north
 
-	# Must account for 360 deg rotation. Since the current angle only describes
+	# Must account for 360 degrees rotation. Since the current angle only describes
 	# difference between two vectors, max is 180. Therefore, use horizontal projection
 	# to determine when current direction is larger than 180
 	if vRotation_hproj[2] < 0:
@@ -161,6 +161,11 @@ def inclination_current(roll, pitch, heading):
 	rollsq = np.tan(roll)*np.tan(roll)
 	pitchsq = np.tan(pitch)*np.tan(pitch)
 	inclination = np.degrees(np.arctan(np.sqrt(rollsq+pitchsq)))
+	#print("Roll:", np.degrees(roll))
+	#print("Pitch:", np.degrees(pitch))
+	#print("Heading:", np.degrees(heading))
+	#print("Inclination:", inclination)
+	#input("Wait")
 
 	#r_currentHeading, r_currentDirection = min(headingDict.items(), key=lambda x: abs(currentDirection - x[1]))
 

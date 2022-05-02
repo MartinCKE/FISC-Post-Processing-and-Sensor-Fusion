@@ -117,7 +117,7 @@ def getEchoData(timestamp):
 				pulseLength = float(acqInfo[2])
 				fs = int(acqInfo[3])
 				acqInfo = data['header']
-				c = 1472.5 ## From profiler data
+				c = 1472.5 ## From profiler data ##
 
 				echoData = data['sectorData'][:]
 				downSampleStep = int(acqInfo[6])
@@ -298,8 +298,13 @@ def calcSize_old(xmin, ymin, xmax, ymax, d):
 	return length, height
 
 def calcCoords(d, c):
-	''' Function for calculating 3D coordinates (in m) for detected objects based
+	''' Function for calculating 3D Cartesia coordinates (in m) for detected objects based
 		on echosounder distance and bounding box center coordinates.
+		Inputs:
+			-d: Echosounder distance to object
+			-c: Pixel coordinate of bounding box center
+		Outputs:
+			[X, Y, Z]: Cartesian coordinates
 	'''
 
 	c_x = c[0]
@@ -327,13 +332,21 @@ def calcCoords(d, c):
 	return x_coord, y_coord, z_coord
 
 def calcSize(xmin, ymin, xmax, ymax, d):
-	''' Calc size
+	''' Estimate size of object in frame based on distance and bounding box size.
+		Inputs:
+			-xmin: Minimum x coordinate of bounding box
+			-ymin: Minimum y coordinate of bounding box
+			-xmax: Maximum x coordinate of bounding box
+			-ymax: Maximum y coordinate of bounding box
+			-d: True distance to object
+		Outputs:
+			[length, height] in meters
 	'''
 	## Calculate size in pizels ##
 	px_length = xmax-xmin
 	px_height = ymax-ymin
 
-	## Calculate salmon length based on bounding box size, distance and camera FOV ##
+	## Estimate salmon length based on bounding box size, distance and camera FOV ##
 	length = 2*d*np.tan((FOV_X/2))*(px_length/1280)
 	height = 2*d*np.tan((FOV_Y/2))*(px_height/720)
 
@@ -366,7 +379,7 @@ def calcSpeed(d_t0, d_t1):
 	return tot_speed
 
 
-def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
+def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 	''' Reads DeepSORT tracker CSV file and sorts data by tracked ID and timestamp.
 		Input: Path to CSV file with tracker data.
 		Output: NA
@@ -403,27 +416,32 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 	trackedArray = np.split(data[ind, :], spp, axis=0)
 
 	## Make plot for acoustic data ##
-	fig, acousticAX = plt.subplots(1)#, figsize=(10,6))
 
+	if showID == 0:
+		fig, acousticAX = plt.subplots(1)#, figsize=(10,6))
 
-	for ID in trackedArray:
+	for track in trackedArray:
+		currID = int(track[0][1])
 
-		if int(ID[0][1]) not in fusionList_ID:
+		if currID not in fusionList_ID:
+			print("Not in list")
 			continue
-		#if int(ID[0][1]) != 195:
-		#	continue
+		if showID != 0:
+			if currID != showID:
+				continue
+			else:
+				fig, acousticAX = plt.subplots(1)#, figsize=(10,6))
 
 		acousticAX.clear()
 
-		currID = ID[0][1]
 		print("Current ID:", currID)
-		print("Number of tracked timestamps:", len(ID))
+		print("Number of tracked timestamps:", len(track))
 
-		if len(ID) < 6:
+		if len(track) < 6:
 			continue
 
-		## Sorting by timestamp to plot in sequence
-		data_sorted = sorted(ID, key=lambda x: x[0])
+		## Sorting by timestamp to plot in sequence ##
+		data_sorted = sorted(track, key=lambda x: x[0])
 
 		## To exclude tracked objects far away from center ##
 		x_threshold_min = 0
@@ -453,6 +471,7 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 			x_center = xmin + (xmax-xmin)/2
 			y_center = ymin + (ymax-ymin)/2
 			center = (int(x_center),int(y_center))
+
 			centerArr.append(center)
 
 
@@ -463,8 +482,9 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 
 			## Visualizing bounding box of current tracked individual in focus ##
 			color = (0,0,255)
+
 			cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
-			cv2.putText(frame, 'Salmon' + "-" + currID,(xmin, ymin-10),0, 0.75, (255,255,255),2)
+			cv2.putText(frame, 'Salmon' + "-" + str(currID),(xmin, ymin-10),0, 0.75, (255,255,255),2)
 
 
 			## Visualizing exclusion zone to ignore object too high/low in the frame ##
@@ -504,9 +524,10 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 
 
 			x, y, z = calcCoords(dist, center)
+			print("\n\r Coordinates for object:", x, y, z)
 
 			## Get estimate of size based on distance and bounbind box coords ##
-			length_old, height_old = calcSize(xmin, ymin, xmax, ymax, dist)
+			length_old, height_old = calcSize_old(xmin, ymin, xmax, ymax, dist)
 			length, height = calcSize(xmin, ymin, xmax, ymax, z)
 
 			## Preview size estimate on frame ##
@@ -516,10 +537,10 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 			temp_speedEstArr_old.append([dist, center, timeStamp])
 
 			color = next(acousticAX._get_lines.prop_cycler)['color']
-			acousticAX.plot(rangeVec,echoEnvelope, label='ID:'+ID[0][1]+'. Time:'+timeStamp, alpha=0.3, color=color)
+			acousticAX.plot(rangeVec,echoEnvelope, label='ID:'+str(currID)+'. Time:'+timeStamp, alpha=0.3, color=color)
 			acousticAX.set_xlabel("Range [m]")
 			acousticAX.set_ylabel("Matched Filter Output")
-			acousticAX.set_title("Acoustic Data for Fish #"+ID[0][1])
+			acousticAX.set_title("Acoustic Data for Fish #"+str(currID))#ID[0][1])
 
 			acousticAX.plot(rangeVec[peaks][maxPeak_idx], maxPeak, "x", alpha=0.5, label='Peak at '+str(rangeVec[peaks][maxPeak_idx])[0:4]+'m used.', color=color)
 
@@ -556,8 +577,10 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots=False):
 
 				#print("Estimated salmon length and height: ", str(length)+"m, ",str(height),"m.")
 				cv2.line(frame, c0, c1, (0, 255, 0), thickness=2)
+				cv2.circle(frame, c1, 1, (0, 255, 0), 10) # Show green circle in current frame bounding box center
+				cv2.circle(frame, c0, 1, (0, 255, 255), 10) # Show yellow circle in previous frame bounding box center
 				BLspeed = speed/length
-				cv2.putText(frame, 'Swimming speed estimate: ' + str(speed)[0:4]+' m/s or: '+str(BLspeed)[0:4]+'BL/s',(xmin, ymax+40),0, 0.5, (255,255,255),2, cv2.LINE_AA)
+				cv2.putText(frame, 'Swimming speed estimate: ' + str(speed)[0:4]+' m/s or: '+str(BLspeed)[0:4]+' BL/s',(xmin, ymax+40),0, 0.5, (255,255,255),2, cv2.LINE_AA)
 
 
 
@@ -673,10 +696,18 @@ if __name__ == '__main__':
 		help="Generate CSV files to extract DeepSORT information at RX sample instances.",
 	)
 	parser.add_argument(
-		"--s",
+		"--savePlots",
 		action="store_true",
 		dest="savePlots",
 		help="Export time-synchronized video frame and acoustic samples.",
+	)
+	parser.add_argument(
+		"--ID",
+		action="store",
+		type=int,
+		default=0,
+		dest="showID",
+		help="To only show fusion data for ID #.",
 	)
 
 	args = parser.parse_args()
@@ -703,5 +734,5 @@ if __name__ == '__main__':
 			print("Current file:", trackerFile)
 			print("Current video:", videoFiles[i])
 			print("\n")
-			extractTrackedTargets(trackerFile, videoFiles[i], args.savePlots)
+			extractTrackedTargets(trackerFile, videoFiles[i], args.savePlots, args.showID)
 			plt.close()
