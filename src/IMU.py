@@ -51,23 +51,28 @@ def plotIMUData(files, ace):
 	timeStamps = []
 	inclinationArr = []
 	currentAngleArr = []
+	rollArr = []
+	pitchArr = []
+	headingArr = []
 	for file in files:
 		hhmmss = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}', file))[2:-2]
 		timeStamp = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}.?[0-9]{5}', file))[2:-2]
-		#timeStamps.append(datetime.datetime.strptime(timeStamp, '%H:%M:%S.%f'))
 
-		#print("file:", file)
 		data=np.load(file, allow_pickle=True)
 		imuData = data['IMU']
 
+
 		if imuData.shape[0] == 4:
 			for i, imuSample in enumerate(imuData):
-				#print(sample)
+
 				roll = float(imuSample[0])
 				pitch = float(imuSample[1])
 				heading = float(imuSample[2])
-				inclination, currentAngle = inclination_current(roll, pitch, heading)
 
+				#roll-= 0.43# 0.556 ## Calib test roll
+				#pitch -= 0.8#2.7933 ## Calib test pitch
+
+				inclination, currentAngle = inclination_current(roll, pitch, heading)
 				if inclination > 10:
 					## Measurements during manual handling are ignored ##
 					continue
@@ -76,13 +81,19 @@ def plotIMUData(files, ace):
 					currentAngleArr.append(currentAngle)
 					temp_timestamp = datetime.datetime.strptime(timeStamp, '%H:%M:%S.%f')
 					timeStamps.append(str(temp_timestamp)[-15:-7])
-					print("Timestamp:", str(temp_timestamp)[-15:-4])
+					rollArr.append(roll)
+					pitchArr.append(pitch)
+					headingArr.append(heading)
+					#print("Timestamp:", str(temp_timestamp)[-15:-4])
 		else:
 			roll = imuData[0]
 			pitch = imuData[1]
 			heading = imuData[2]
+			#roll-=0.556 ## Calib test roll
+			#pitch += 2.7933 ## Calib test pitch
 
 			inclination, currentAngle = inclination_current(roll, pitch, heading)
+
 			if inclination > 10:
 				## Measurements during manual handling are ignored ##
 				continue
@@ -91,11 +102,32 @@ def plotIMUData(files, ace):
 				currentAngleArr.append(currentAngle)
 				temp_timestamp = datetime.datetime.strptime(timeStamp, '%H:%M:%S.%f')
 				timeStamps.append(str(temp_timestamp)[-15:-4])
-				print("Timestamp:", str(temp_timestamp)[-15:-4])
+				rollArr.append(roll)
+				pitchArr.append(pitch)
+				headingArr.append(heading)
+				#print("Timestamp:", str(temp_timestamp)[-15:-4])
 
 		#inclinationArr.append(inclination)
 		#print("\n\r Inclination:", inclination)
 		#currentAngleArr.append(currentAngle)
+	### TESTING
+	'''
+	rollArr-=np.mean(rollArr)
+	pitchArr -= np.mean(pitchArr)
+
+	for i, val in enumerate(rollArr):
+		inclination, currentAngle = inclination_current(rollArr[i], pitchArr[i], headingArr[i])
+		if inclination > 10:
+			## Measurements during manual handling are ignored ##
+			continue
+		else:
+
+			inclinationArr.append(inclination)
+			currentAngleArr.append(currentAngle)
+
+
+	### TESTING END
+	'''
 	current_filtered = butterworth_LP_filter(currentAngleArr, 4, 100, 2)
 
 	currentFig, currentAx = plt.subplots(1, figsize=(10,7))
@@ -107,18 +139,20 @@ def plotIMUData(files, ace):
 	currentAx.xaxis.set_major_locator(plt.MaxNLocator(10))
 
 
-	'''
+
 	inclination_filtered = butterworth_LP_filter(inclinationArr, 4, 100, 2)
 
 	inclinationFig, inclinationAx = plt.subplots(1, figsize=(10,7))
 	inclinationAx.plot(timeStamps, inclinationArr, label='Raw Estimates')
 	inclinationAx.plot(timeStamps, inclination_filtered, label='Filtered Estimates')
+	inclinationAx.plot(timeStamps, rollArr, label='roll')
+	inclinationAx.plot(timeStamps, pitchArr, label='pitch')
 	plt.title("Capsule Vertical Inlication", fontsize=16)
 	inclinationAx.set_xlabel("Time [HH:MM:SS]", fontsize=14)
 	inclinationAx.set_ylabel("Inclination Angle [deg]", fontsize=14)
 	inclinationAx.xaxis.set_major_locator(plt.MaxNLocator(10))
 	plt.tight_layout()
-	'''
+
 	plt.legend(loc='upper right')
 
 	if ace:

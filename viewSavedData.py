@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import scipy.signal
-from pylab import *
+
 import time
 import re
 from datetime import datetime
@@ -10,11 +10,12 @@ import argparse
 
 #Importing other scripts
 from src.fusePlot import syncPlot_timeStampFromFrames
-from tools.acousticProcessing import matchedFilter, gen_mfilt, peakDetect, processEcho
+from tools.acousticProcessing import matchedFilter, gen_mfilt, peakDetect, processEcho, colorMapping, polarPlot_init, RX_polarPlot
 from src.profilePlot import SVProfilePlot, profilePlot
 from src.IMU import plotIMUData, inclination_current
 
 
+import matplotlib
 matplotlib.use('TkAgg')
 channelArray = [['Sector 1', '0'],['Sector 2', '2'],
 				['Sector 3', '2'],['Sector 4', '0'],
@@ -105,7 +106,6 @@ def peakDetect(data, num_train=6, num_guard=2, rate_fa=1e-3):
 	detectorarr = np.log10(data/peaks)
 
 	return peak_idx, noiseArr, detectorarr, thresholdArr
-
 
 def move_figure(f, x, y):
 	"""Move figure's upper left corner to pixel (x, y)"""

@@ -31,14 +31,14 @@ fusionList_ID = [19, 132, 2, 114, 115, 42, 145, 195, 123, 144, 98, 107, 162, 4, 
 FOV_X = np.deg2rad(48)
 FOV_Y = np.deg2rad(28.6)
 
-def genTrackerData():
+def genTrackerData(startTime, stopTime):
 	''' Function for generating CVS-files with DeepSORT tracker information.
 		The function will call the external YOLOv4-DeepSORT repository with acoustic ping
 		timestamps in the call, such that the DeepSORT tracker information is extracted at
 		times where an acoustic sample is acquired.
 	'''
-	rx_files = loadFileNames(args.startTime, args.stopTime, True, True)
-	videoFiles = loadVideoFileNames_fusion(args.startTime, args.stopTime)
+	rx_files = loadFileNames(startTime, stopTime, True, True)
+	videoFiles = loadVideoFileNames_fusion(startTime, stopTime)
 
 	print(videoFiles)
 

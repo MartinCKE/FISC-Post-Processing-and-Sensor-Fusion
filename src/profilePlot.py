@@ -6,9 +6,12 @@ from  matplotlib.colors import LinearSegmentedColormap
 from scipy.stats import truncnorm, norm
 from matplotlib import cm
 from matplotlib.ticker import MaxNLocator
-from tools.acousticProcessing import butterworth_LP_filter
-import os
+from tools.acousticProcessing import butterworth_LP_filter, polarPlot_init, RX_polarPlot, gen_mfilt, processEcho, peakDetect, colorMapping
+from src.IMU import inclination_current
 
+import os
+import matplotlib
+matplotlib.use('TkAgg')
 
 depthLog_SH = {'09:48':2, '09:49':3, '09:50':4, '09:51':5, '09:52':5}
 
@@ -24,6 +27,125 @@ def get_truncated_normal(mean=0, sd=1, low=0, upp=10):
 def gaussian(x, mu, sig):
 	'''from https://stackoverflow.com/questions/14873203/plotting-of-1-dimensional-gaussian-distribution-function'''
 	return 1./(np.sqrt(2.*np.pi)*sig)*np.exp(-np.power((x - mu)/sig, 2.)/2)
+
+def RX_polarPlot_3D(ax, CH1_Intensity, CH2_Intensity, zone, inclinationArr, currentDirArr, headingArr, O2, Temperature, fileName, Z):
+	#global rangeLabels, rangeTicks
+	sector = zone*2-1
+
+	## Assigning colormap to sampled sector for plotting ##
+	timeStamp = str(fileName)[-18:-4]
+	date = str(fileName)[-33:-25]
+
+	nBins = len(CH1_Intensity)
+	for rangeVal in range(0, nBins):
+		colorMap[rangeVal, sector] = CH1_Intensity[rangeVal]
+		colorMap[rangeVal, sector+1] = CH2_Intensity[rangeVal]
+
+	TH = cbook.simple_linear_interpolation(theta, 5) ## Rounding bin edges
+
+	##Properly padding out C so the colors go with the right sectors
+	#start[0] = time.time()
+	C = np.zeros((rangeBins.size, TH.size))
+	oldfill = 0
+	TH_ = TH.tolist()
+	for i in range(theta.size):
+		fillto = TH_.index(theta[i])
+		for j, x in enumerate(colorMap[:,i]):
+			C[j, oldfill:fillto].fill(x)
+		oldfill = fillto
+
+	#axPolar.clear() ## Clearing plot before writing new data
+
+
+
+	ax3D.set_title("Ping:"+date+"_"+timeStamp)
+
+	## Polar plot setup ##
+	#print("\n Heading:", heading)
+	#print("\n")
+	ax3D.set_theta_direction(1) #Rotation plotting direction
+	ax3D.set_theta_zero_location('N', offset=360-157.5) #Zero location north instead of east. Needs to be set according to PCB mounted orientation!
+
+
+	if type(heading) is list:
+		northArrow = np.full((50,), np.deg2rad(heading[-1]+157.5))
+		eastArrow = np.full((50,), np.deg2rad(heading[-1]+157.5+90))
+		westArrow = np.full((50,), np.deg2rad(heading[-1]+157.5-90))
+		southArrow = np.full((50,), np.deg2rad(heading[-1]+157.5+180))
+	else:
+		northArrow = np.full((50,), np.deg2rad(heading+157.5))
+		eastArrow = np.full((50,), np.deg2rad(heading+157.5+90))
+		westArrow = np.full((50,), np.deg2rad(heading+157.5-90))
+		southArrow = np.full((50,), np.deg2rad(heading+157.5+180))
+
+	r = np.arange(rangeBins[-1]-50, rangeBins[-1])
+	axPolar.plot(northArrow, r, color='red')
+	axPolar.plot(eastArrow, r, color='white')
+	axPolar.plot(southArrow, r, color='white')
+	axPolar.plot(westArrow, r, color='white')
+
+
+	## Setting range and theta ticks/labels ##
+	#axPolar.set_xticks(np.arange(0,2.0*np.pi,np.pi/4.0))
+	#axPolar.set_xticklabels(['SSE', 'ESE', 'ENE', 'NNE', 'NNW', 'WNW', 'WSW', 'SSW'])
+	axPolar.set_xticklabels([])
+	axPolar.set_yticks(rangeTicks)
+	axPolar.set_yticklabels(rangeLabels, fontsize=12) #Range labels in meters
+	axPolar.tick_params(colors='red')
+
+	for i in range(1,9):
+		## Adding Sector identifier text ##
+		thetaPos = 2*np.pi*i/8 - np.pi/8 + 0.1
+		axPolar.text(thetaPos-0.05, rangeBins[-100], "Sector "+str(i),bbox=dict(facecolor='red', alpha=0.4))
+
+	axPolar.text(0.065, 0.05, 'Vertical inclination:'+str(inclination)+" (degrees)", transform=plt.gcf().transFigure)
+	axPolar.text(0.02, 0.02, 'Water current direction:'+str(currentDir)+" (degrees)", transform=plt.gcf().transFigure)
+	axPolar.text(0.073, 0.08, 'Heading direction:'+str(heading)+"(degrees)", transform=plt.gcf().transFigure)
+
+	axPolar.text(0.65, 0.08, 'Water $\mathrm{O_2}$ Saturation: '+str(O2)+" %", transform=plt.gcf().transFigure)
+	axPolar.text(0.65, 0.02, 'Water Temperature: '+str(Temp)+" (degrees)", transform=plt.gcf().transFigure)
+
+	'''
+	axPolar.text(0, 0, "test",
+      horizontalalignment='left',
+      verticalalignment='top',
+      size='large',
+      bbox=dict(facecolor='red', alpha=1.0),
+      transform=plt.gca().transAxes)
+	 '''
+	## Plotting meshgrid ##
+	th, r = np.meshgrid(TH, rangeBins)
+	C = normalizeData(C) ## Normalizing colormap array from 0 to 1
+	axPolar.pcolormesh(th, r, C, cmap='cividis', shading='gouraud', vmin=0, vmax=1)# shading='gouraud' gives smoothing
+	axPolar.grid()
+
+	## Normalizing detector output from 0 to 1 ##
+	CH1_Det = normalizeData(CH1_Det)
+	CH2_Det = normalizeData(CH2_Det)
+	#print("detections:", CH1_Det)
+	#print(len(rangeBins))
+	#print("sector:", sector)
+	#print("bl:",(sector*2 - 1))
+
+	CH1_Det_idx = np.asarray(np.where(CH1_Det > 0.0)) ## To only plot actual detections
+	CH2_Det_idx = np.asarray(np.where(CH2_Det > 0.0)) ## To only plot actual detections
+
+	thetaArr_1 = np.full((CH1_Det_idx.shape[1]), (sector*2 - 1)*np.pi/8)
+	thetaArr_2 = np.full((CH2_Det_idx.shape[1]), ((sector+1)*2 - 1)*np.pi/8)
+
+	ax3D.plot_surface(
+	X, Y, Z, rstride=1, cstride=1, cmap=plt.get_cmap('jet'),
+	linewidth=0, antialiased=False, alpha=0.5)
+
+	## Plotting normalized detector output in corresponding sector ##
+	axPolar.scatter(thetaArr_1, rangeBins[CH1_Det_idx], c=CH1_Det[CH1_Det_idx], cmap='RdPu_r', vmin=0, vmax=1) ## Plotting CH1 detections, colormapped
+	axPolar.scatter(thetaArr_2, rangeBins[CH2_Det_idx], c=CH2_Det[CH2_Det_idx], cmap='RdPu_r', vmin=0, vmax=1) ## Plotting CH2 detections, colormapped
+	plt.draw()
+
+
+	plt.pause(1e-5) ##
+
+
 
 def profilePlot(files, ace):
 
@@ -112,6 +234,132 @@ def profilePlot(files, ace):
 		i+=1
 		temps.append(float(dataArr[-1]))
 
+		'''
+		## TEST START ##
+
+		acqInfo = data['header']
+		imuData = data['IMU']
+		O2Data = data['O2']
+		print("O2 Data", O2Data)
+		fc = int(acqInfo[0])
+		BW = int(acqInfo[1])
+		pulseLength = acqInfo[2]
+		fs = acqInfo[3]
+		Range = int(acqInfo[4])
+		c = acqInfo[5]
+		downSampleStep = int(acqInfo[6])
+
+		if ace:
+			c = 1472.5
+		else:
+			c = 1463
+
+		if data['sectorData'].ndim == 1:
+			Sector4_data = data['sectorData'][:]
+			nSamples = len(Sector4_data)
+			sectorFocus = True
+			print("Sector Focus")
+		else:
+			Sector1_data = data['sectorData'][:,0]
+			Sector2_data = data['sectorData'][:,1]
+			Sector3_data = data['sectorData'][:,2]
+			Sector4_data = data['sectorData'][:,3]
+			Sector5_data = data['sectorData'][:,4]
+			Sector6_data = data['sectorData'][:,5]
+			Sector7_data = data['sectorData'][:,6]
+			Sector8_data = data['sectorData'][:,7]
+			nSamples = len(Sector1_data)
+			print("Sector Scan")
+
+
+
+
+		### Acquisition constants ###
+		#SampleTime = Range*2.0/c # How long should we sample for to cover range
+		SampleTime = nSamples*(1/fs)
+		Range = c*SampleTime/2
+		#nSamples = int(fs*SampleTime) # Number og samples to acquire per ping
+		samplesPerPulse = int(fs*pulseLength)  # How many samples do we get per pulse length
+		tVec = np.linspace(0, SampleTime, nSamples)
+		tVecShort = tVec[0:len(tVec):downSampleStep] # Downsampled time vector for plotting
+		plen_d = (c*pulseLength)/2
+		rangeVec = np.linspace(-plen_d, Range, len(tVec))
+		rangeVecShort = np.linspace(-plen_d, Range, len(tVecShort)).round(decimals=2)
+
+
+		## Matched filter
+		mfilt = gen_mfilt(fc, BW, pulseLength, fs)
+
+		polarPlot_init(tVecShort, rangeVecShort)
+
+		#fig3D = plt.figure()
+		#ax3D = fig3D.add_subplot(1,1,1, projection='3d')
+
+		inclinationArr = []
+		currentDirArr = []
+		headingArr = []
+		for zone in range(1,5):
+			#ax2[0].clear()
+			#ax2[1].clear()
+			roll = imuData[zone-1][0]
+			pitch = imuData[zone-1][1]
+			heading = imuData[zone-1][2]
+
+			headingArr.append(round(heading, 2))
+
+			inclination, currentDir = inclination_current(roll, pitch, heading)
+			inclinationArr.append(inclination)
+			currentDirArr.append(currentDir)
+			#print("INCLINATION:", inclination, "currentAngle", currentDir)
+
+			min_idx = int(np.argwhere(rangeVecShort>1)[0]) ## To ignore detections closer than the set min range
+			CH1_Data = data['sectorData'][:,2*zone-1]
+			CH2_Data = data['sectorData'][:,2*(zone-1)]
+
+
+			echoEnvelope_CH1, peaks_CH1 = processEcho(CH1_Data, fc, BW, pulseLength, fs, downSampleStep, samplesPerPulse, min_idx)
+			echoEnvelope_CH2, peaks_CH2 = processEcho(CH2_Data, fc, BW, pulseLength, fs, downSampleStep, samplesPerPulse, min_idx)
+
+			CH1_peaks_idx, CH1_noise, CH1_detections, CH1_thresholdArr = peakDetect(echoEnvelope_CH1, num_train=3, num_guard=5, rate_fa=0.3)
+			CH2_peaks_idx, CH2_noise, CH2_detections, CH2_thresholdArr = peakDetect(echoEnvelope_CH2, num_train=3, num_guard=5, rate_fa=0.3)
+			CH1_Intensity, CH2_Intensity = colorMapping(echoEnvelope_CH1, echoEnvelope_CH2)
+
+
+			detectionArr_CH1 = np.zeros((len(echoEnvelope_CH1)))
+			detectionArr_CH2 = np.zeros((len(echoEnvelope_CH2)))
+
+			figg, axx = plt.subplots(1)
+			#axx.plot(echoEnvelope_CH1, label='echoEnvelope_CH1')
+			#axx.plot(peaks_CH1, label='peaks_CH1')
+			#axx.legend()
+			#plt.show()
+
+			detectionArr_CH1[peaks_CH1] = echoEnvelope_CH1[peaks_CH1]
+			detectionArr_CH2[peaks_CH2] = echoEnvelope_CH2[peaks_CH2]
+			#print(detectionArr_CH1[peaks_CH1])
+			#print(detectionArr_CH2[peaks_CH2])
+
+			maxPeak_CH1 = np.max(echoEnvelope_CH1[peaks_CH1])
+			maxPeak_CH2 = np.max(echoEnvelope_CH2[peaks_CH2])
+
+			maxPeak_idx_CH1 = np.argmax(echoEnvelope_CH1[peaks_CH1])
+			maxPeak_idx_CH2 = np.argmax(echoEnvelope_CH2[peaks_CH2])
+			## Extract distance to peak ##
+			dist_CH1 = rangeVec[peaks_CH1][maxPeak_idx_CH1]
+			dist_CH2 = rangeVec[peaks_CH2][maxPeak_idx_CH2]
+
+
+			#RX_polarPlot_3D(ax3D, CH1_Intensity, CH2_Intensity, zone, inclinationArr, currentDirArr, headingArr, O2S[i-1], temps[i-1], file, depths[i-1])
+
+
+
+
+			RX_polarPlot(CH1_Intensity, CH2_Intensity, zone, [0,0,0], [0,0,0], \
+						inclinationArr, currentDirArr, headingArr, O2S[i-1], temps[i-1], file, sectorFocus=False)
+		#plt.show()
+
+		## TEST END ##
+		'''
 
 
 
@@ -127,6 +375,7 @@ def profilePlot(files, ace):
 	meshfig, meshax = plt.subplots(1, figsize=(9,7))
 	O2Mesh, TempMesh = np.meshgrid(y_o2, y_temps, indexing='xy')
 	Z = O2Mesh*TempMesh
+	#Z = (O2Mesh+TempMesh)/2
 	plt.imshow(Z, cmap=custom_cmap, aspect='auto', origin='lower',extent=[min(o2Range), max(o2Range), min(tempRange), max(tempRange)])
 	#extent=[min(o2Range), max(o2Range), min(tempRange), max(tempRange)]
 
@@ -145,7 +394,7 @@ def profilePlot(files, ace):
 	cbar.ax.set_ylabel('Aquatic Environment Score Bar')#, rotation=270)
 	plt.xlabel("$\mathrm{O_2}$ Saturation [%]")
 	plt.ylabel("Temperature [$\degree$C]")
-	#plt.savefig(os.getcwd()+"/plots/AquaticMeshgrid.pdf")
+	#plt.savefig(os.getcwd()+"/plots/AquaticMeshgrid_AltHeatmap.pdf")
 	#plt.show()
 
 	## Assigning color to points ##
@@ -192,8 +441,8 @@ def profilePlot(files, ace):
 		totval = t_val*o2_val
 		print("totval:", totval)
 		print("Zval:", Zval)
-		#colors.append(totval)
-		colors.append(totval)
+		colors.append((t_val+o2_val)/2) ## Avg value
+		#colors.append(totval) ## Multiplicative, more strict
 		colors_temp.append(t_val)
 		colors_o2.append(o2_val)
 		#quit()
@@ -245,10 +494,10 @@ def profilePlot(files, ace):
 	ax3.grid()
 	if ace:
 		profilefig.suptitle('Profile Measurements at Rataren 2')
-		plt.savefig(os.getcwd()+"/plots/O2_temp_profile_ACE.pdf")
+		#plt.savefig(os.getcwd()+"/plots/O2_temp_profile_ACE_AltHeatmap.pdf")
 	else:
 		profilefig.suptitle('Profile Measurements at Sinkaberg Hansen (Rørvik)')
-		plt.savefig(os.getcwd()+"/plots/O2_temp_profile_SH.pdf")
+		#plt.savefig(os.getcwd()+"/plots/O2_temp_profile_SH_AltHeatmap.pdf")
 
 
 
