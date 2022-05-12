@@ -13,3 +13,10 @@ dependencies:
     - absl-py
     - easydict
     - pillow
+    - re
+    - subprocess
+    - datetime
+    - argparse
+    - scipy
+    - pylab
+    - serial
