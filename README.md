@@ -1,6 +1,6 @@
 # 81358_FISC_Post_Processing
 
-Post processing and AI-related tasks on FISC data.
+Post processing and sendor fusion-related tasks on FISC data.
 
 
 Installation guide.
