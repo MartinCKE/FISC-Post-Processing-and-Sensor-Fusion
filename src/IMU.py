@@ -313,10 +313,10 @@ def plotIMUData(files, ace):
 
 	if ace:
 		plt.axvline(x=26.2,color='r', label='axvline - % of full height', lw=4.7, alpha=0.5)
-		plt.title("Estimated Water Current Direction at Rataren II", fontsize=16)
+		currentAx.set_title("Estimated Water Current Direction at Rataren II", fontsize=16)
 		#.savefig(os.getcwd()+'/plots/WaterCurrentDirection_ACE.pdf')
 	else:
-		plt.title("Estimated Water Current Direction at Sinkaberg Hansen (Rørvik)", fontsize=16)
+		currentAx.set_title("Estimated Water Current Direction at Sinkaberg Hansen (Rørvik)", fontsize=16)
 		#plt.savefig(os.getcwd()+'/plots/WaterCurrentDirection_SH.pdf')
 	plt.tight_layout()
 	plt.show()
