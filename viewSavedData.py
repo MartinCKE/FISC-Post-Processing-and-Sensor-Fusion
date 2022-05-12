@@ -1,8 +1,14 @@
+''' Script for visualizing FISC data.
+	Takes additional call arguments to specificy plot type, which data to plot and
+	numerous settings.
+	To list possible arguments, run: python3 viewSavedData.py --h
+'''
+
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import scipy.signal
-
+from pylab import sort
 import time
 import re
 from datetime import datetime
@@ -11,7 +17,7 @@ import argparse
 #Importing other scripts
 from src.fusePlot import syncPlot_timeStampFromFrames
 from tools.acousticProcessing import matchedFilter, gen_mfilt, peakDetect, processEcho, colorMapping, polarPlot_init, RX_polarPlot
-from src.profilePlot import SVProfilePlot, profilePlot
+from src.profilePlot import SVProfilePlot, profilePlot, O2TempPlot
 from src.IMU import plotIMUData, inclination_current
 
 
@@ -23,89 +29,11 @@ channelArray = [['Sector 1', '0'],['Sector 2', '2'],
 				['Sector 7', '3'],['Sector 8', '1']]
 
 
-## Change this to look at certain dates/hours/minutes
-## SavedData-folder must be in same directory as script
-#directory = os.getcwd()+'/Data/SectorFocus/16-02-22'#09_16'
-#print("Directory:", directory)
-
-
-
 headingDict = {"N":0, "NNE":22.5, "NE":45, "ENE":67.5, "E":90,\
 			   "ESE":112.5, "SE":135, "SSE":157.5, "S":180, \
 			   "SSW":202.5, "SW":225, "WSW":247.5, "W":270, \
 			   "WNW":292.5, "NW":315, "NNW":337.5}
 
-
-def normalizeData(data):
-	if not np.all((data == 0)):
-		return (data - np.min(data)) / (np.max(data) - np.min(data))
-	else:
-		print('Only zeros ecountered, check data.')
-		return data
-
-def peakDetect(data, num_train=6, num_guard=2, rate_fa=1e-3):
-	''' Cell-Averaging Constant False Alarm Rate (CFAR) detector algorithm.
-
-		CUT = Cell under test
-		Parameters:
-		num_train = samples surrounding CUT, assumed to be noise
-		num_guard = samples adjacent to CUT to avoid signal leakage to noise
-		rate_fa = chosen false alarm rate (default = 0.001)
-	'''
-
-	num_cells = data.size
-	num_train_half = round(num_train / 2)
-	num_guard_half = round(num_guard / 2)
-	num_side = num_train_half + num_guard_half
-
-	alpha = num_train*(rate_fa**(-1/num_train) - 1) # threshold factor
-
-	peak_idx = []
-	peaks = []
-	noiseArr = []
-	thresholdArr = []
-
-	for i in range(0, num_cells):
-
-		if i<num_side:
-			'''Portion of samples before CUT is num_side samples out '''
-			trainingCellSum = np.sum(data[:i+num_side+1])*2
-			guardCellSum = np.sum(data[:i+num_guard_half+1])*2
-			p_noise = (trainingCellSum - guardCellSum) / num_train
-
-		elif i>num_cells-num_side:
-			'''Portion of samples after CUT is num_side samples from end '''
-			trainingCellSum = np.sum(data[i-num_side:])*2
-			guardCellSum = np.sum(data[i-num_guard_half:])*2
-			p_noise = (trainingCellSum - guardCellSum) / num_train
-
-		else:
-			trainingCellSum = np.sum(data[i-num_side:i+num_side+1])
-			guardCellSum = np.sum(data[i-num_guard_half:i+num_guard_half+1])
-			p_noise = (trainingCellSum - guardCellSum) / num_train
-
-		#alpha = 2 ## Custom threshold (rate_fa ignored)
-		threshold = alpha * p_noise
-		thresholdArr.append(threshold)
-		noiseArr.append(p_noise)
-
-		if data[i] > threshold:
-			peak_idx.append(i)
-			peaks.append(p_noise)
-			if peaks[i] <= 0:
-				peaks[i] = 0.00001
-
-		else:
-			peaks.append(data[i])
-			if peaks[i] <= 0:
-				peaks[i] = 0.00001
-
-
-	peak_idx = np.array(peak_idx, dtype=int)
-
-	detectorarr = np.log10(data/peaks)
-
-	return peak_idx, noiseArr, detectorarr, thresholdArr
 
 def move_figure(f, x, y):
 	"""Move figure's upper left corner to pixel (x, y)"""
@@ -120,6 +48,9 @@ def move_figure(f, x, y):
 		f.canvas.manager.window.move(x, y)
 
 def loadFileNames(startTime, stopTime, sectorFocus, ace):
+	''' Function for loading FISC acquisition files with acquisiton info
+		and acoustic RX data.
+	'''
 
 	if ace:
 		if sectorFocus:
@@ -135,16 +66,13 @@ def loadFileNames(startTime, stopTime, sectorFocus, ace):
 	files = []
 	hhmmss_list = []
 
-	#hhmmss = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}', filename))[2:-2]
 
 	for root, dirs, filenames in os.walk(directory, topdown=False):
 		for filename in filenames:
 			if '' in filename:
 				filename = filename.replace("", ":")
 			hhmm = str(re.findall('[0-9]{2}:[0-9]{2}', filename))[2:-2] ## To get HH:MM from filename
-			#print(hhmm)
-			#print(directory)
-			#print(filename)
+
 			if 'DS' in filename:
 				continue
 
@@ -160,21 +88,17 @@ def loadFileNames(startTime, stopTime, sectorFocus, ace):
 	return files
 
 def loadVideoFileNames(startTime, stopTime, ace, deepsort):
+	''' Function for loading FISC video-files.
+	'''
 	videofiles = []
 	hhmmss_list = []
 	if ace and not deepsort:
 		directory = os.getcwd()+'/Data/cam_recordings/secondTest/compressed'
-		print("Ace")
 	elif ace and deepsort:
 		directory = os.getcwd() + '/deepsort/outputs'
-		print("HEU")
 	else:
-		print("nope")
 		directory = os.getcwd()+'/Data/cam_recordings/firstTest'
 
-	#hhmm = str(re.findall('[0-9]{2}-[0-9]{2}', filename))[2:-2]
-	#hhmmss = str(re.findall('[0-9]{2}-[0-9]{2}-[0-9]{2}', filename))[2:-2]
-	print("Dir:", directory)
 	for root, dirs, filenames in os.walk(directory, topdown=False):
 		for filename in filenames:
 			if 'DS' in filename:
@@ -272,8 +196,6 @@ if __name__ == '__main__':
 	if args.syncPlot and not args.o2temp:
 		rx_files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus, args.ace)
 		videoFiles = loadVideoFileNames(args.startTime, args.stopTime, args.ace, args.deepsort)
-		print("RX files:", rx_files)
-		print("Videos:", videoFiles)
 		for video in videoFiles:
 			syncPlot_timeStampFromFrames(video, rx_files, sectorFocus=args.sectorFocus, \
 												savePlots=args.savePlots, showPlots=args.showPlots, ace=args.ace, deepsort=args.deepsort)
@@ -282,19 +204,16 @@ if __name__ == '__main__':
 	if args.o2temp:
 		if args.profile:
 			SVProfilePlot(args.ace)
-			## Depth measurements performed in this time window
+			## Depth measurements performed in this time window ##
 			if args.ace:
 				files = loadFileNames('12:50', '13:00', False, args.ace)
 			else:
 				files = loadFileNames('09:47', '09:51', args.sectorFocus, args.ace)
-			#for file in files:
-			#    print(file)
 			profilePlot(files, args.ace)
 		else:
-			files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus)
-			for file in files:
-				print(file)#print(files)
+			files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus, args.ace)
 			O2TempPlot(files)
+		quit()
 
 	if args.imu:
 		if args.ace:
@@ -306,10 +225,9 @@ if __name__ == '__main__':
 
 
 
-	#fig, ax = plt.subplots(1)
 	rx_files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus, args.ace)
 
-	#fig3, (ax1, ax2) = plt.subplots(2,figsize=(8,6))
+	fig3, (ax2) = plt.subplots(2,figsize=(8,6))
 
 	for filename in rx_files:
 		timeStamp = str(filename)[-18:-4]
@@ -317,15 +235,13 @@ if __name__ == '__main__':
 
 		data=np.load(filename, allow_pickle=True)
 
-		print("Current file:", filename[-46:-4])
-
+		print("Current RX file:", filename[-33:-4])
 
 		if len(data['header']) > 5:
 			''' Since header-contents were changed at some point '''
 			acqInfo = data['header']
 			imuData = data['IMU']
 			O2Data = data['O2']
-			print("O2 Data", O2Data)
 			fc = int(acqInfo[0])
 			BW = int(acqInfo[1])
 			pulseLength = acqInfo[2]
@@ -352,15 +268,16 @@ if __name__ == '__main__':
 			c = 1472.5
 		else:
 			c = 1463
-		#downSampleStep = 1
+		#downSampleStep = 1 ## Uncomment this to disable downsampling
 
 		## Fetching O2 and Temp value. Sensor data structure is odd, length varies ##
 		tempArray = np.array_str(O2Data).strip(' []\n')
 		dataArr = tempArray.split(" ")
-		print("\n\r hei:", len(dataArr))
-		print("O2 data:", dataArr)
 		if len(dataArr) == 6:
-			O2 = float(dataArr[2])
+			try:
+				O2 = float(dataArr[2])
+			except:
+				O2 = float(dataArr[3])
 		elif len(dataArr) == 8:
 			try:
 				O2 = float(dataArr[4])
@@ -375,12 +292,13 @@ if __name__ == '__main__':
 			O2 = float(dataArr[2])
 		Temp = float(dataArr[-1])
 
-		## Differentiate sector scan from sector focus
+		## Differentiate sector scan from sector focus ##
+		sectorFocus = False
 		if data['sectorData'].ndim == 1:
 			Sector4_data = data['sectorData'][:]
 			nSamples = len(Sector4_data)
 			sectorFocus = True
-			print("Sector Focus")
+			print("Sector Focus file loaded.")
 		else:
 			Sector1_data = data['sectorData'][:,0]
 			Sector2_data = data['sectorData'][:,1]
@@ -391,14 +309,13 @@ if __name__ == '__main__':
 			Sector7_data = data['sectorData'][:,6]
 			Sector8_data = data['sectorData'][:,7]
 			nSamples = len(Sector1_data)
-			print("Sector Scan")
+			print("Sector Scan file loaded.")
 
 
 		### Acquisition constants ###
 		#SampleTime = Range*2.0/c # How long should we sample for to cover range
 		SampleTime = nSamples*(1/fs)
 		Range = c*SampleTime/2
-		#nSamples = int(fs*SampleTime) # Number og samples to acquire per ping
 		samplesPerPulse = int(fs*pulseLength)  # How many samples do we get per pulse length
 		tVec = np.linspace(0, SampleTime, nSamples)
 		tVecShort = tVec[0:len(tVec):downSampleStep] # Downsampled time vector for plotting
@@ -407,26 +324,19 @@ if __name__ == '__main__':
 		rangeVecShort = np.linspace(-plen_d, Range, len(tVecShort)).round(decimals=2)
 
 
-		## Matched filter
+		## Generate matched filter ##
 		mfilt = gen_mfilt(fc, BW, pulseLength, fs)
-
-
-		polarPlot_init(tVecShort, rangeVecShort)
 
 		#plt.xlim((0, Range))
 		#fig3, (ax1, ax2) = plt.subplots(2,figsize=(7,6))
 
-		if args.sectorFocus:
+		if args.sectorFocus or sectorFocus:
 			#fig2, ax = plt.subplots(1,figsize=(7,6))
 
-			#move_figure(fig2, 600, 0)
+			move_figure(fig3, 600, 0)
 			roll = imuData[0]
 			pitch = imuData[1]
 			heading = imuData[2]
-
-			a = np.arctan(np.deg2rad(roll))*np.arctan(np.deg2rad(roll))
-			b = np.arctan(np.deg2rad(pitch))*np.arctan(np.deg2rad(pitch))
-			tilt = np.degrees(np.arctan(sqrt(a+b)))
 
 			inclination, currentDir = inclination_current(roll, pitch, heading)
 			heading = round(heading, 2)
@@ -446,58 +356,55 @@ if __name__ == '__main__':
 			maxPeak = np.max(echoEnvelope[peaks])
 
 			maxPeak_idx = np.argmax(echoEnvelope[peaks])
+
 			## Extract distance to peak ##
 			dist = rangeVec[peaks][maxPeak_idx]
-			#for val in CH1_Intensity:
-			#	print(val)
-			#quit()
 
-			RX_polarPlot(CH1_Intensity, _, 2, [0,0], detectionArr, inclination, currentDir, heading, O2, Temp, filename, sectorFocus=True)
-			plt.savefig(os.getcwd()+'/plots/PolarPlot_'+timeStamp+'.pdf')
-			'''
-			#plt.show()
-			#continue
-			ax.clear()
-			#ax1.clear()
 
-			ax.plot(rangeVecShort,echoEnvelope,color='red')
-			ax.plot(rangeVecShort[peaks], echoEnvelope[peaks], 'x', color='black', alpha=0.5, label='CA-CFAR Detections')
-			ax.set_xlabel("Range [m]")
-			ax.set_ylabel("Matched Filter Output")
-			ax.set_title("Sector 4 Acoustic Data")#Acoustic Data for Ping "+str(date)+'_'+timeStamp)# for Fish #"+ID[0][1])
-			ax.plot(rangeVecShort[peaks][maxPeak_idx], maxPeak, "x", alpha=1, color='blue', label='Peak at '+str(rangeVecShort[peaks][maxPeak_idx])[0:4]+'m used.')
+			#RX_polarPlot(CH1_Intensity, _, 2, [0,0], detectionArr, inclination, currentDir, heading, O2, Temp, filename, sectorFocus=True)
+			#plt.savefig(os.getcwd()+'/plots/PolarPlot_'+timeStamp+'.pdf')
 
-			ax.set_xlim([0,5])
+			ax2[0].clear()
+			ax2[1].clear()
+
+			#ax.plot(rangeVecShort,echoEnvelope,color='red')
+			#ax.plot(rangeVecShort[peaks], echoEnvelope[peaks], 'x', color='black', alpha=0.5, label='CA-CFAR Detections')
+			#ax.set_xlabel("Range [m]")
+			#ax.set_ylabel("Matched Filter Output")
+			#ax.set_title("Sector 4 Acoustic Data")#Acoustic Data for Ping "+str(date)+'_'+timeStamp)# for Fish #"+ID[0][1])
+			#ax.plot(rangeVecShort[peaks][maxPeak_idx], maxPeak, "x", alpha=1, color='blue', label='Peak at '+str(rangeVecShort[peaks][maxPeak_idx])[0:4]+'m used.')
+
+			#ax.set_xlim([0,5])
 			#ax2.set_xlim([0,5])
-			fig2.suptitle("Acoustic Data for Ping "+str(date)+'_'+timeStamp)
+			#fig2.suptitle("Acoustic Data for Ping "+str(date)+'_'+timeStamp)
 
 
 
 			## Acoustic processing pipeline plot ##
-			ax1.plot(rangeVec, Sector4_data, label='Raw RX Data')
-			ax1.set_xlabel("Range [m]")
-			ax1.set_ylabel("Signal Amplitude [V]")
-			ax1.set_title('Raw RX Data')
+			ax2[0].plot(rangeVec, Sector4_data, label='Raw RX Data')
+			ax2[0].set_xlabel("Range [m]")
+			ax2[0].set_ylabel("Signal Amplitude [V]")
+			ax2[0].set_title('Raw RX Data')
 
-			ax2.plot(rangeVecShort,echoEnvelope,color='red')
-			ax2.plot(rangeVecShort[peaks], echoEnvelope[peaks], 'x', color='black', alpha=0.5, label='CA-CFAR Detections')
-			ax2.set_xlabel("Range [m]")
-			ax2.set_ylabel("Matched Filter Output")
-			ax2.set_title("Processed RX Data")#Acoustic Data for Ping "+str(date)+'_'+timeStamp)# for Fish #"+ID[0][1])
-			ax2.plot(rangeVecShort[peaks][maxPeak_idx], maxPeak, "x", alpha=1, color='blue', label='Peak at '+str(rangeVecShort[peaks][maxPeak_idx])[0:4]+'m used.')
+			ax2[1].plot(rangeVecShort,echoEnvelope,color='red')
+			ax2[1].plot(rangeVecShort[peaks], echoEnvelope[peaks], 'x', color='black', alpha=0.5, label='CA-CFAR Detections')
+			ax2[1].set_xlabel("Range [m]")
+			ax2[1].set_ylabel("Matched Filter Output")
+			ax2[1].set_title("Processed RX Data")#Acoustic Data for Ping "+str(date)+'_'+timeStamp)# for Fish #"+ID[0][1])
+			ax2[1].plot(rangeVecShort[peaks][maxPeak_idx], maxPeak, "x", alpha=1, color='blue', label='Peak at '+str(rangeVecShort[peaks][maxPeak_idx])[0:4]+'m used.')
 
-			ax1.set_xlim([0,5])
-			ax2.set_xlim([0,5])
+			ax2[0].set_xlim([0,5])
+			ax2[1].set_xlim([0,5])
 			fig3.suptitle("Acoustic Data for Ping "+str(date)+'_'+timeStamp)
 
 			plt.tight_layout()
-			##
+
 
 
 			#ax.plot(rangeVecShort, CH1_Env, label='Signal from Sector 4')
-			ax.legend()
-			ax.legend()
-			'''
+			ax2[0].legend()
+			ax2[1].legend()
+
 			plt.draw()
 			plt.pause(1e-6)
 			plt.waitforbuttonpress()
@@ -510,12 +417,13 @@ if __name__ == '__main__':
 
 		else:
 			#fig2, ax2 = plt.subplots(2,figsize=(7,6))
+			polarPlot_init(tVecShort, rangeVecShort)
 			inclinationArr = []
 			currentDirArr = []
 			headingArr = []
 			for zone in range(1,5):
-				#ax2[0].clear()
-				#ax2[1].clear()
+				ax2[0].clear()
+				ax2[1].clear()
 				roll = imuData[zone-1][0]
 				pitch = imuData[zone-1][1]
 				heading = imuData[zone-1][2]
@@ -555,12 +463,11 @@ if __name__ == '__main__':
 				dist_CH2 = rangeVec[peaks_CH2][maxPeak_idx_CH2]
 
 
-
 				RX_polarPlot(CH1_Intensity, CH2_Intensity, zone, CH1_detections, CH2_detections, \
 							inclinationArr, currentDirArr, headingArr, O2, Temp, filename, sectorFocus=False)
 				#plt.savefig(os.getcwd()+'/plots/PolarPlot_'+timeStamp+'.pdf')
 
-				'''
+
 				ax2[0].plot(rangeVecShort,echoEnvelope_CH1,color='red')
 				ax2[0].plot(rangeVecShort[peaks_CH1], echoEnvelope_CH1[peaks_CH1], 'x', color='black', alpha=0.5, label='CA-CFAR Detections')
 				ax2[0].set_xlabel("Range [m]")
@@ -590,71 +497,10 @@ if __name__ == '__main__':
 				#ax3.plot(tVecShort[CH2_peaks_idx], CH2_detections[CH2_peaks_idx], 'rD')
 				ax2[0].legend()
 				ax2[1].legend()
-				'''
-				#plt.tight_layout()
+
+				plt.tight_layout()
 
 				plt.draw()
 				plt.pause(1e-6)
-
-		plt.show()
-		TX_freqs = np.linspace(0, fs, int(fs*pulseLength))
-
-
-		continue
-		sig = Sector4_data
-		#sig -= lastData
-		X = 20.0*np.log10(np.fft.fft(sig))
-		RX_freqs = np.linspace(0,fs, len(sig))
-		#ax3.plot(RX_freqs, X)#, label=legendtext)
-
-		#X[int(len(X)/2):-1] = 0
-		#plt.plot(X, label="X removed samples")
-		#Y = np.fft.ifft(X)
-		#plt.plot(abs(Y), label='Y')
-
-
-
-
-
-
-
-		#txsig = sig[3319:3319+int(fs*pulseLength)]
-		## Plot FFT of matched filter and TX pulse (change idx)
-		#plt.plot(freqs,20*np.log10(abs(np.fft.fft(txsig))))
-		#plt.plot(freqs,20*np.log10(abs(np.fft.fft(mfilt))))
-		#plt.show()
-
-		## Correlating matched filter with RX data ##
-		CH1_Out, _ = matchedFilter(Sector4_data, Sector4_data, downSampleStep, mfilt)
-
-		#siginzeros = np.hstack([np.zeros(6591), mfiltham])
-
-
-		## Plotting all data
-
-		#fig, (ax1, ax2) = plt.subplots(2, figsize=(9,6))
-		ax1.plot(rangeVec, Sector4_data,label="Time: "+filename[-18:-5])
-		plt.setp(ax1, xlabel='Range [m]')
-		plt.setp(ax1, ylabel='Voltage [V]')
-		#ax1.set_xlim(0,2.8)
-		ax1.set_title("Raw Samples")
-
-		ax2.plot(rangeVec,CH1_Out, label="Time: "+filename[-18:-5])
-		plt.setp(ax2, xlabel='Range [m]')
-		plt.setp(ax2, ylabel='Correlation')
-		#ax2.set_xlim(0,2.8)
-		ax2.set_title("Correlated Matched Filter Output")
-
-		ax1.grid()
-		ax2.grid()
-
-
-
-		#fig2, ax = plt.subplots(1)
-		#ax.plot(freqs, 20*np.log10(abs(np.fft.fft(mfilt))), color='red')
-		#ax.plot(freqs, 20*np.log10(abs(np.fft.fft(txsig))))
-		#ax.plot(mfilt)
-		#plt.show()
-		#plt.plot(tfilt, mfilt)
-		#plt.show()
-		#plt.plot(freqs,abs(np.fft.fft(mfilt)))
+				plt.waitforbuttonpress()
+			plt.close()
