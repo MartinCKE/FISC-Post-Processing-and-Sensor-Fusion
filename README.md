@@ -11,10 +11,11 @@ Installation guide.
     1. If no GPU acceleration is used, run: “conda env create -f conda-cpu.yml”
     2. If CUDA-supported GPU is used, run: “conda env create -f conda-cgpu.yml”. This requires CUDA Toolkit 10.1 to be installed (https://developer.nvidia.com/cuda-10.1-download-archive-update2)
 4. Hopefully, no errors occur here. If so. run: “conda activate yolov4-cpu” or “conda activate yolov4-gpu”.
-
-Only 3 videos are included in the repository due to file size constraints.
-All videos from the second field test can be downloaded from:
-https://drive.google.com/file/d/1oTzxz269bf6eGfWYmWoPtyDgbs2yqzVT/view?usp=sharing
+5. Only 3 videos are included in the repository due to file size constraints.
+   All videos from the second field test can be downloaded from:
+   https://drive.google.com/file/d/1oTzxz269bf6eGfWYmWoPtyDgbs2yqzVT/view?usp=sharing
+6. If you are going to run the YOLOv4-DeepSORT software (generate), you need the custom trained weight files or the YOLOv4 model. 
+   These are downloaded from: https://drive.google.com/file/d/1AZcUAWdVLyUQrFmTyyS0RiiCWRj2nww7/view?usp=sharing
 
 Place these videos in the data/cam_recordings/secondTest/compress directory.
 Now, you're ready to test the FISC processing software! 
