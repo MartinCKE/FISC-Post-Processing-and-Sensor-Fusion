@@ -8,6 +8,7 @@ def processEcho(data, fc, BW, pulseLength, fs, downSampleStep, samplesPerPulse, 
 	''' Function for processing echo data from one sector.
 		Input: Raw ADC samples from RX.
 		Output:
+			[mfilt envelope, CA-CFAR detector peak indexes]
 	'''
 	## Generate matched filter from TX pulse parameters ##
 	mfilt = gen_mfilt(fc, BW, pulseLength, fs)
@@ -25,8 +26,6 @@ def processEcho(data, fc, BW, pulseLength, fs, downSampleStep, samplesPerPulse, 
 	else:
 		CH1_peaks_idx, CH1_noise, CH1_detections, CH1_thresholdArr = peakDetect(echoData_Env, num_train=3, num_guard=5, rate_fa=0.3)
 
-	print("Data length:", len(echoData_Env))
-	print("Detections length:", len(CH1_detections))
 	## Using "scipy find peaks" to extract one detection per peak
 	#CH1_detections = normalizeData(CH1_detections)
 	CH1_detections = CH1_detections - 1 ## Removing offset
@@ -36,23 +35,13 @@ def processEcho(data, fc, BW, pulseLength, fs, downSampleStep, samplesPerPulse, 
 	peaks_idx, _ = scipy.signal.find_peaks(CH1_detections, distance=5, height=threshold)
 
 	peaks_idx = np.delete(peaks_idx, np.where(peaks_idx < min_idx)) ## Removing peak detections closer than min range
-	'''
-	print("Detections:", CH1_detections)
-	fig, ax = plt.subplots(1)
-	ax.plot(CH1_detections, label='data input')
-	#ax.plot(test, color='black')
-	ax.plot(echoData_Env, label='Signal envelope')
-	plt.plot(peaks_idx, CH1_detections[peaks_idx], "x", label='Detections')
-	plt.plot(np.zeros_like(CH1_detections), "--", color="gray", label='threshold')
-	plt.legend()
-	plt.show()
-	quit()
-	'''
 
 
 	return echoData_Env, peaks_idx
 
 def thresholding_algo(y, lag, threshold, influence):
+	''' Not used.
+	'''
 	signals = np.zeros(len(y))
 	filteredY = np.array(y)
 	avgFilter = [0]*len(y)
@@ -80,6 +69,8 @@ def thresholding_algo(y, lag, threshold, influence):
 				stdFilter = np.asarray(stdFilter))
 
 def butterworth_LP_filter(data, cutoff, fs, order):
+	''' Butterworth low-pass filter
+	'''
 	nyq = 0.5 * fs
 	normal_cutoff = cutoff / nyq
 	#Filter coefficients
@@ -88,26 +79,29 @@ def butterworth_LP_filter(data, cutoff, fs, order):
 	return y
 
 def butterworth_BP_filter(data, lowcut, highcut, fs, order=3):
-		nyq = 0.5 * fs
-		low = lowcut / nyq
-		high = highcut / nyq
-		sos = butter(order, [low, high], analog=False, btype='band', output='sos')
-		w, h = scipy.signal.sosfreqz(sos)
-		y = sosfilt(sos, data)
-		'''
-		plt.plot(data, color='red')
-		plt.plot(y, color='black')
-		#plt.plot((fs * 0.5 / np.pi) * w, abs(h), label="order = %d" % order)
+	''' Butterworth band-pass filter
+	'''
+	nyq = 0.5 * fs
+	low = lowcut / nyq
+	high = highcut / nyq
+	sos = butter(order, [low, high], analog=False, btype='band', output='sos')
+	w, h = scipy.signal.sosfreqz(sos)
+	y = sosfilt(sos, data)
+	'''
+	plt.plot(data, color='red')
+	plt.plot(y, color='black')
+	#plt.plot((fs * 0.5 / np.pi) * w, abs(h), label="order = %d" % order)
+	#db = 20*np.log10(np.abs(h))
+	#plt.plot(w/np.pi, db, 'orange', label='')
 
-		#db = 20*np.log10(np.abs(h))
-		#plt.plot(w/np.pi, db, 'orange', label='')
-
-		plt.show()
-		quit()
-		'''
-		return y
+	plt.show()
+	quit()
+	'''
+	return y
 
 def TVG(data, Range, c, fs):
+	''' Function to add digital TVG to echo signal.
+	'''
 
 	times = np.linspace(0,Range/c, len(data))
 
@@ -142,6 +136,8 @@ def TVG(data, Range, c, fs):
 	return data_gained*10**(data_gained/20)
 
 def gen_mfilt(fc, BW, pulseLength, fs):
+	''' Generate pulse replica for matched filter.
+	'''
 	### Matched filter w/ Hamming window ###
 	tfilt = np.linspace(0, pulseLength, int(fs*pulseLength))
 	mfilt = scipy.signal.chirp(tfilt, int(fc-BW/2), tfilt[-1], int(fc+BW/2),method='linear',phi=90)
@@ -150,12 +146,7 @@ def gen_mfilt(fc, BW, pulseLength, fs):
 	return mfilt
 
 def normalizeData(data):
-	'''
-	figg, axx = plt.subplots(1)
-	axx.plot(data, color='red')
-	data[data<0] = 0
-	axx.plot(data, color='black')
-	plt.show()
+	''' Basic 0-1 normalization.
 	'''
 	if not np.all((data == 0)):
 		return (data - np.min(data)) / (np.max(data) - np.min(data))
@@ -239,12 +230,10 @@ def peakDetect(data, num_train=6, num_guard=2, rate_fa=1e-3):
 
 	return peak_idx, noiseArr, detectorarr, thresholdArr
 
-
 def Hilbert(CH1_Data, CH2_Data, downSampleStep):
 	''' Does basic frequency-domain analysis
 		as well as downsampling the envelope time signal for
-		making plotting faster. Will be used in more technical
-		signal analysis later on.
+		making plotting faster. Not used in current processing.
 	'''
 	### Hilbert transform on signal ###
 	CH1_Hilb = scipy.signal.hilbert(CH1_Data)
@@ -292,7 +281,7 @@ def matchedFilter(CH1_data, CH2_data, mfilt, downSampleStep, samplesPerPulse):
 
 def polarPlot_init(tVecShort, rangeVecShort):
 	''' Initializes empty polar plot for data visualization.
-		Plots downsampled data based on setting in main.py.
+		Plots downsampled data based on downSampleStep.
 	'''
 	global nBins, theta, rangeBins, colorMap, fig, axPolar, rangeLabels, rangeTicks
 
@@ -323,24 +312,21 @@ def colorMapping(CH1_data, CH2_data):
 	## Max/Min values for mapping ##
 	## Voltage levels in ##
 	inMin = 0
-	inMax = 10 ## Color sensitivity setting
+	inMax = 3 ## Color sensitivity setting
+
 	## Colormap range ##
 	outMin = 0
 	outMax = 1
-	#hm, ax5 =plt.subplots(1)
-	#ax5.plot(CH1_data, color='red')
 	for i, val in enumerate(CH1_data):
 		CH1_colorMap[i] = (val-inMin) * (outMax-outMin) / (inMax-inMin) + outMin
 
 	for i, val in enumerate(CH2_data):
 		CH2_colorMap[i] = (val-inMin) * (outMax-outMin) / (inMax-inMin) + outMin
-	#ax5.plot(CH1_colorMap, color='black')
-	#plt.show()
-	#quit()
+
 	return CH1_colorMap, CH2_colorMap
 
 def RX_polarPlot(CH1_Intensity, CH2_Intensity, zone, CH1_Det, CH2_Det, inclination, currentDir, heading, O2, Temp, fileName, sectorFocus=False):
-	''' Plots the received echo intensities on a polar plot with heading information.
+	''' Plots the received echo intensities on a polar plot with additiona sensor information.
 	'''
 	global rangeLabels, rangeTicks
 	sector = zone*2-1
@@ -358,15 +344,10 @@ def RX_polarPlot(CH1_Intensity, CH2_Intensity, zone, CH1_Det, CH2_Det, inclinati
 			colorMap[rangeVal, sector] = CH1_Intensity[rangeVal]
 			colorMap[rangeVal, sector+1] = CH2_Intensity[rangeVal]
 
-	#figg, axx = plt.subplots(1)
-	#axx.plot(CH2_Intensity)
-	#print(CH2_Intensity)
-	#plt.show()
-	#quit()
+
 	TH = cbook.simple_linear_interpolation(theta, 5) ## Rounding bin edges
 
 	##Properly padding out C so the colors go with the right sectors
-	#start[0] = time.time()
 	C = np.zeros((rangeBins.size, TH.size))
 	oldfill = 0
 	TH_ = TH.tolist()
@@ -383,13 +364,9 @@ def RX_polarPlot(CH1_Intensity, CH2_Intensity, zone, CH1_Det, CH2_Det, inclinati
 	axPolar.set_title("Ping:"+date+"_"+timeStamp)
 
 	## Polar plot setup ##
-	#print("\n Heading:", heading)
-	#print("\n")
+
 	axPolar.set_theta_direction(1) #Rotation plotting direction
 	axPolar.set_theta_zero_location('N', offset=360-157.5) #Zero location north instead of east. Needs to be set according to PCB mounted orientation!
-	#axPolar.set_theta_offset(np.deg2rad(heading)) #Rotating plot with compass heading
-
-	#northArrow = np.full((20,), np.deg2rad(heading+157.5))
 
 	if type(heading) is list:
 		northArrow = np.full((50,), np.deg2rad(heading[-1]+157.5))
@@ -446,10 +423,6 @@ def RX_polarPlot(CH1_Intensity, CH2_Intensity, zone, CH1_Det, CH2_Det, inclinati
 	## Normalizing detector output from 0 to 1 ##
 	CH1_Det = normalizeData(CH1_Det)
 	CH2_Det = normalizeData(CH2_Det)
-	#print("detections:", CH1_Det)
-	#print(len(rangeBins))
-	#print("sector:", sector)
-	#print("bl:",(sector*2 - 1))
 
 	CH1_Det_idx = np.asarray(np.where(CH1_Det > 0.0)) ## To only plot actual detections
 	CH2_Det_idx = np.asarray(np.where(CH2_Det > 0.0)) ## To only plot actual detections
@@ -460,7 +433,6 @@ def RX_polarPlot(CH1_Intensity, CH2_Intensity, zone, CH1_Det, CH2_Det, inclinati
 	## Plotting normalized detector output in corresponding sector ##
 	axPolar.scatter(thetaArr_1, rangeBins[CH1_Det_idx], c=CH1_Det[CH1_Det_idx], cmap='RdPu_r', vmin=0, vmax=1) ## Plotting CH1 detections, colormapped
 	axPolar.scatter(thetaArr_2, rangeBins[CH2_Det_idx], c=CH2_Det[CH2_Det_idx], cmap='RdPu_r', vmin=0, vmax=1) ## Plotting CH2 detections, colormapped
+
 	plt.draw()
-
-
-	plt.pause(1e-5) ##
+	plt.pause(1e-5)

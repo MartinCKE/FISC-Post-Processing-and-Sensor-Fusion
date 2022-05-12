@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-	Script for fusing YOLOv4 with DeepSORT and acoustic data to compute fish swimming speed.
+	Script for fusing YOLOv4-DeepSORT and acoustic data to compute individual fish size and swimming speed.
 
 '''
 import numpy as np
@@ -31,19 +31,17 @@ fusionList_ID = [19, 132, 2, 114, 115, 42, 145, 195, 123, 144, 98, 107, 162, 4, 
 FOV_X = np.deg2rad(48)
 FOV_Y = np.deg2rad(28.6)
 
-def genTrackerData(startTime, stopTime):
+def genTrackerData(startTime, endTime):
 	''' Function for generating CVS-files with DeepSORT tracker information.
 		The function will call the external YOLOv4-DeepSORT repository with acoustic ping
 		timestamps in the call, such that the DeepSORT tracker information is extracted at
 		times where an acoustic sample is acquired.
+		Requires GPU computation, recommended to run on CUDA-accelerated PC.
 	'''
-	rx_files = loadFileNames(startTime, stopTime, True, True)
-	videoFiles = loadVideoFileNames_fusion(startTime, stopTime)
-
-	print(videoFiles)
+	rx_files = loadFileNames(startTime, endTime, True, True)
+	videoFiles = loadVideoFileNames_fusion(startTime, endTime)
 
 	for video in videoFiles:
-
 		vidStart, vidEnd = parseVideoTime(video)
 		print("Video timestamp [start, end]", vidStart, vidEnd)
 
@@ -62,15 +60,12 @@ def genTrackerData(startTime, stopTime):
 
 			elif hhmmssff > vidEnd:
 				break
-		print("video:", video)
-		print("rx files:", rxFiles_timeStamps)
+
 		rxFiles_timeStamps =str(rxFiles_timeStamps).strip('[]')
-		#print("wtf", rxFiles_timeStamps)
-		#quit()
-		DeepSORT_cmd = 'object_tracker.py --weights ./checkpoints/FISC_4 --video '+video+ ' --info --SF_timestamps ' + rxFiles_timeStamps
-		test = '--weights ./checkpoints/FISC_4 --video '+video+ ' --info --SF_timestamps ' + rxFiles_timeStamps
-		#quit()
-		#object_tracker(--weights ./checkpoints/FISC_4 --video +video+ --info --SF_timestamps + rxFiles_timeStamps)
+
+		#DeepSORT_cmd = 'object_tracker.py --weights ./checkpoints/FISC_4 --video '+video+ ' --info --SF_timestamps ' + rxFiles_timeStamps
+		#test = '--weights ./checkpoints/FISC_4 --video '+video+ ' --info --SF_timestamps ' + rxFiles_timeStamps
+		## Call YOLOv4-DeepSORT script to generate tracker files ###
 		subprocess.call(['python3', 'object_tracker.py', '--weights', './checkpoints/FISC_4', '--info', '--video', video, '--SF_timestamps', rxFiles_timeStamps], cwd=os.getcwd()+'/deepsort')
 
 def loadVideoFileNames_fusion(startTime, stopTime):
@@ -91,7 +86,8 @@ def loadVideoFileNames_fusion(startTime, stopTime):
 			hhmm = hhmm.replace("-", ":")
 			if startTime <= hhmm <= stopTime:
 				videofiles.append(root+'/'+filename)
-				print("video added:", filename)
+				print("Video added:", filename)
+
 
 	videofiles = sort(videofiles) ## Sorting by time
 
@@ -108,8 +104,6 @@ def getEchoData(timestamp):
 		for file in files:
 			if timestamp in file:
 				filepath = root+'/'+file
-				print("current file", file)
-
 				data=np.load(filepath, allow_pickle=True)
 				acqInfo = data['header']
 				fc = int(acqInfo[0])
@@ -132,47 +126,24 @@ def getEchoData(timestamp):
 				plen_d = (c*pulseLength)/2
 				rangeVec = np.linspace(-plen_d, Range, len(tVec))
 				rangeVecShort = np.linspace(-plen_d, Range, len(tVecShort)).round(decimals=2)
-				print("fc:", int(fc), "BW:", int(BW), "fs:", int(fs), \
-					"plen (us):", int(pulseLength*1e6), "range:", Range, "c:", c, "Downsample step:", downSampleStep)
+				#print("fc:", int(fc), "BW:", int(BW), "fs:", int(fs), \
+				#	"plen (us):", int(pulseLength*1e6), "range:", Range, "c:", c, "Downsample step:", downSampleStep)
 
 				## Process echo data and fetch matched filter envelope and peaks in signal ##
 				min_idx = int(np.argwhere(rangeVec>1)[0]) ## To ignore detections closer than the set min range
 				echoEnvelope, peaks = processEcho(echoData, fc, BW, pulseLength, fs, 1, samplesPerPulse, min_idx)
-				#fig3, ax3 = plt.subplots(1)
-				#print(len(peaks))
-				#print(len(echoEnvelope))
-				#ax3.plot(echoEnvelope)
-				#ax3.plot(echoEnvelope[peaks])
-				#plt.show()
-				#quit()
+
 
 				return echoEnvelope, peaks, rangeVec
-				'''
 
-				fig, ax = plt.subplots(1)
-				#ax.plot(echoData_Env)
-				#ax.plot(CH1_detections, color='blue', label='detections')
-				ax.plot(echoEnvelope, label='data')
-				#ax.plot(echoData, label='raw data')
-				ax.plot(peaks, echoEnvelope[peaks], "x", alpha=0.5, label=file)
-				#ax.plot(echoData_Env_n, color='black', alpha=0.5)
-				#ax.plot(CH1_detections, color='red', alpha=0.5)
-				#plt.plot(echoData_Env_n)
-				#plt.plot(rangeVecShort[CH1_peaks_idx], CH1_detections[CH1_peaks_idx], 'rD')
-				#plt.plot()
-				plt.legend()
-				plt.draw()
-				plt.
-				#quit()
-				'''
 
 def getFrame(videoFile, timeStamp):
-	''' Function for fetching video frame with specific timestamp
+	''' Function for fetching video frame with specific timestamp.
 	'''
-	print("Get frame from video:", videoFile)
-	print("Get frame with timestamp:", timeStamp)
+
+
 	startTime, endTime = parseVideoTime(videoFile)
-	print(startTime, endTime)
+	print("Video Start time and end time:", startTime, endTime)
 	timeStamp = datetime.datetime.strptime(timeStamp, '%H:%M:%S.%f')
 
 	### Create a VideoCapture object ###
@@ -185,13 +156,11 @@ def getFrame(videoFile, timeStamp):
 	### Frame resolution is obtained ###
 	frame_width = int(cap.get(3))
 	frame_height = int(cap.get(4))
-	#print("Width, Height:", frame_width, frame_height)
 
 
 	### Define the codec and create VideoWriter object.The output is stored in 'outpy.avi' file. ##
 	#out = cv2.VideoWriter('outpy.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 10, (frame_width,frame_height))
 
-	#calc_timestamps = [0]
 	fps = cap.get(cv2.CAP_PROP_FPS)
 
 	#timestamps = [datetime.datetime.strptime(startTime, '%H:%M:%S')]
@@ -215,32 +184,16 @@ def getFrame(videoFile, timeStamp):
 				curr_frame_timestamp = datetime.datetime.strptime(timestamps[-1], '%H:%M:%S') + datetime.timedelta(seconds=1/fps)
 				timestamps.append(str(curr_frame_timestamp)[-15:])
 
-			if abs(timeStamp - last_frame_timestamp) < datetime.timedelta(milliseconds=20) or (timeStamp - last_frame_timestamp).days == -1:
-				print("rx file:", timeStamp)
-				print("MATCH")
+			if abs(timeStamp - last_frame_timestamp) < datetime.timedelta(milliseconds=10) or (timeStamp - last_frame_timestamp).days == -1:
+				### Fetches a frame with timestamp coinciding with acoustic ping timestamp (10 ms accuracy) ##
+				#print("rx file:", timeStamp)
+				print("\r\nMATCH")
+				#print("Video CURRENT timestamp:", curr_frame_timestamp)
 				return frame, last_frame_timestamp
-				#frame_s = cv2.resize(frame, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_AREA)
-				#cv2.imshow(str(curr_frame_timestamp), frame_s)
-				#cv2.waitKey(0)
-			#frame_s = cv2.resize(frame, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_AREA)
-			#cv2.imshow(str(curr_frame_timestamp), frame_s)
-			#cv2.waitKey(0)
-			#if cv2.waitKey(33) & 0xFF == ord('q'):
-			#	continue
-				#rx_strTimeStamp = datetime.datetime.strptime(rxFiles_timeStamps[i], '%Y-%m-%d_%H-%M-%S')
-
-				#rx_strTimeStamp = str(rxFiles_timeStamps[i])[-15:]# +'.0'
-
-
-				#genSyncPlot(axs, frame, startTime, rxFilesInVideo[i], rx_strTimeStamp, **kwargs)
-				#if i+1 == len(rxFilesInVideo):
-				#	break
-				#i+=1
-
 
 	  # Break the loop
 		else:
-			print("break")
+			print("Could not read video. Check CV2 build.")
 			break
 
 	# Closes all the frames
@@ -249,15 +202,15 @@ def getFrame(videoFile, timeStamp):
 	cv2.destroyAllWindows()
 
 def calcSpeed_old(d0, d1, c0, c1, delta_t):
-	''' Function for simple estimation of object speed based on two time samples
+	''' Function for simple estimation of object speed based on two time samples.
+		Discarded due to wrong geometrical assumptions, but not deleted for future
+		reference.
 	'''
 	c0_x = c0[0]
 	c1_x = c1[0]
 	c0_y = c0[1]
 	c1_y = c1[1]
 
-	print(c0_x)
-	print(c1_x)
 	s_x = 2*d0*np.tan(FOV_X/2)*((c1_x-c0_x)/1280)
 	v_x = s_x/delta_t
 
@@ -273,6 +226,8 @@ def calcSpeed_old(d0, d1, c0, c1, delta_t):
 def calcSize_old(xmin, ymin, xmax, ymax, d):
 	''' Function for calculating size of object based on bounding box coords
 		and distance to objects. Assumes a perfect bounding box.
+		Not used due to wrong geometrical assumptions, but not deleted for future
+		reference.
 		Inputs:
 			- xmin: Minimum x pixel coordinate of bounding box
 			- xmax: Max x pixel coordinate of bounding box
@@ -298,8 +253,9 @@ def calcSize_old(xmin, ymin, xmax, ymax, d):
 	return length, height
 
 def calcCoords(d, c):
-	''' Function for calculating 3D Cartesia coordinates (in m) for detected objects based
-		on echosounder distance and bounding box center coordinates.
+	''' Function for calculating relative 3D Cartesian coordinates (in m) for
+		detected objects based on echosounder distance and bounding box center
+		coordinates.
 		Inputs:
 			-d: Echosounder distance to object
 			-c: Pixel coordinate of bounding box center
@@ -325,14 +281,11 @@ def calcCoords(d, c):
 	y_coord = d * np.sin(phi_y)
 	z_coord = np.sqrt(d**2 - x_coord**2 - y_coord**2)
 
-	#print('phi x', np.rad2deg(phi_x))
-	#print('phi y', np.rad2deg(phi_y))
-	#print("Dist x, y, z:", x_coord, y_coord, z_coord)
 
 	return x_coord, y_coord, z_coord
 
-def calcSize(xmin, ymin, xmax, ymax, d):
-	''' Estimate size of object in frame based on distance and bounding box size.
+def calcSize(xmin, ymin, xmax, ymax, z):
+	''' Estimate size of object in frame based on distance to object and bounding box size.
 		Inputs:
 			-xmin: Minimum x coordinate of bounding box
 			-ymin: Minimum y coordinate of bounding box
@@ -347,8 +300,8 @@ def calcSize(xmin, ymin, xmax, ymax, d):
 	px_height = ymax-ymin
 
 	## Estimate salmon length based on bounding box size, distance and camera FOV ##
-	length = 2*d*np.tan((FOV_X/2))*(px_length/1280)
-	height = 2*d*np.tan((FOV_Y/2))*(px_height/720)
+	length = 2*z*np.tan((FOV_X/2))*(px_length/1280)
+	height = 2*z*np.tan((FOV_Y/2))*(px_height/720)
 
 	length = round(length, 3)
 	height = round(height, 3)
@@ -368,27 +321,28 @@ def calcSpeed(d_t0, d_t1):
 	t0 = datetime.datetime.strptime(d_t0[-1], '%H:%M:%S.%f')
 	t1 = datetime.datetime.strptime(d_t1[-1], '%H:%M:%S.%f')
 	delta_t = (t1-t0).total_seconds()
-	#print("Delta t:", delta_t)
 
 	delta_pos = np.subtract(d_t1[0:-1], d_t0[0:-1])
-	print("delta pos", delta_pos)
 	speed = delta_pos/delta_t
-	print("speed", speed)
+	print("Velocities in [x, y, z] directions:", speed)
 	tot_speed = np.linalg.norm(speed)
-	print("tot speed", tot_speed, "m/s")
+	print("Absolute velocity", tot_speed, "m/s")
 	return tot_speed
 
-
 def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
-	''' Reads DeepSORT tracker CSV file and sorts data by tracked ID and timestamp.
-		Input: Path to CSV file with tracker data.
-		Output: NA
+	''' Reads DeepSORT tracker CSV file and visualizes time-synchronized plots
+		of individually tracked salmon.
+		Matches frame with coinciding acoustic ping for sensor fusion.
+		Input: Path to CSV file with tracker data and matching video file.
+		Arguments:
+			- savePlots: Export synchronized plots
+			- showID: Only show matches with salmon ID#
 	'''
 	data = []
 	timestamps = []
 	counter = 0
-	print("Current tracker file:", trackerFile)
-	print("Current video file:", videoFile)
+	#print("Current tracker file:", trackerFile)
+	#print("Current video file:", videoFile)
 
 	with open(trackerFile) as f:
 		data_reader = csv.reader(f)
@@ -424,7 +378,8 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 		currID = int(track[0][1])
 
 		if currID not in fusionList_ID:
-			print("Not in list")
+			print("Chosen ID "+'"'+str(currID)+'"'+" is not in list of good fusion matches. Please use one of the following ID's:\r")
+			print("[19, 132, 2, 114, 115, 42, 145, 195, 123, 144, 98, 107, 162, 4, 113, 51, 108, 130, 153, 138, 65, 93, 91, 113]\n\r")
 			continue
 		if showID != 0:
 			if currID != showID:
@@ -458,7 +413,6 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 		for sample in data_sorted:
 			## Acoustic timestamp ##
 			timeStamp = sample[0]
-			print("Current sample", sample)
 
 			## Fetching bounding box coordinates for current individual ##
 			xmin, ymin, xmax, ymax = int(sample[2]), int(sample[3]), int(sample[4]), int(sample[5])
@@ -476,14 +430,13 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 
 
 			## Extracting frame which matches the timestamp ##
-			print("video:",videoFile)
 			frame, vid_timeStamp = getFrame(videoFile, timeStamp)
 
 
 			## Visualizing bounding box of current tracked individual in focus ##
 			color = (0,0,255)
 
-			cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
+			cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2) ## Bounding Box
 			cv2.putText(frame, 'Salmon' + "-" + str(currID),(xmin, ymin-10),0, 0.75, (255,255,255),2)
 
 
@@ -497,10 +450,7 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 			echoEnvelope, peaks, rangeVec = getEchoData(timeStamp)
 
 			## Find largest peak ##
-			print("Peaks:", peaks)
 			maxPeak = np.max(echoEnvelope[peaks])
-
-
 
 			#temp_Envelope = echoEnvelope ## To ignore detections very close
 			#temp_Envelope[0:min_idx] = 0
@@ -509,29 +459,23 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 			#maxPeak_idx = np.argmax(np.argwhere(echoEnvelope[peaks]>1))
 			## Extract distance to peak ##
 			dist = rangeVec[peaks][maxPeak_idx]
-			#fig, acousticAX = plt.subplots(1)#, figsize=(10,6))
-			#acousticAX.plot(5,4)
-			#plt.show()
-
-			#acousticAX.plot(echoEnvelope[peaks], label='heu')
-			#acousticAX.plot(peaks, label='peaks')
-			#acousticAX.plot(maxPeak_idx, label='heu')
-			#acousticAX.plot(rangeVec[peaks][maxPeak_idx], maxPeak, "x", alpha=0.5, label='Peak', color='red')
-			#plt.legend()
-			#plt.show()
-			#quit()
-
 
 
 			x, y, z = calcCoords(dist, center)
-			print("\n\r Coordinates for object:", x, y, z)
+			print("Coordinates for object [x, y, z] (m):", x, y, z)
+			print("Echosounder distance (m):", dist)
 
 			## Get estimate of size based on distance and bounbind box coords ##
 			length_old, height_old = calcSize_old(xmin, ymin, xmax, ymax, dist)
 			length, height = calcSize(xmin, ymin, xmax, ymax, z)
 
 			## Preview size estimate on frame ##
-			cv2.putText(frame, 'Size estimate (length, height): ('+str(length)+', '+str(height)+')',(xmin, ymax+20),0, 0.5, (255,255,255),2, cv2.LINE_AA)
+			sizeText = 'Size estimate (length, height): ('+str(length)+', '+str(height)+') [m]'
+			(w, h), _ = cv2.getTextSize(sizeText, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2) ## Space required by text
+
+			#cv2.rectangle(frame, (xmin, ymax + 40), (xmin + w, ymax), (0,0,0), -1) ## Background for text
+			cv2.rectangle(frame, (xmin-3, ymax+3), (xmin + w+12, ymax+65), (0,0,0), -1) ## Background for text
+			cv2.putText(frame, sizeText,(xmin, ymax+25),0, 0.7, (255,255,255),2, cv2.LINE_AA) ## Write text
 
 			temp_speedEstArr.append([x, y, z, timeStamp])
 			temp_speedEstArr_old.append([dist, center, timeStamp])
@@ -565,29 +509,21 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 				c0 = centerArr[-2]
 				c1 = centerArr[-1]
 
-
-				#print(d0, d1, c0, c1, delta_t)
 				speed = calcSpeed(temp_speedEstArr[-2], temp_speedEstArr[-1])
-				old_speed = calcSpeed_old(d0, d1, c0, c1, delta_t)
-				#vtot = calcSpeed(d0, d1, c0, c1, delta_t)
-
-				print("\n\r Size OLD:", length_old, height_old," Size NEW:", length, height)
-				print("Estimated swimming speed: ", speed, "m/s")
-				print("Old estimated swimming speed:", old_speed, "m/s")
 
 				#print("Estimated salmon length and height: ", str(length)+"m, ",str(height),"m.")
 				cv2.line(frame, c0, c1, (0, 255, 0), thickness=2)
 				cv2.circle(frame, c1, 1, (0, 255, 0), 10) # Show green circle in current frame bounding box center
 				cv2.circle(frame, c0, 1, (0, 255, 255), 10) # Show yellow circle in previous frame bounding box center
 				BLspeed = speed/length
-				cv2.putText(frame, 'Swimming speed estimate: ' + str(speed)[0:4]+' m/s or: '+str(BLspeed)[0:4]+' BL/s',(xmin, ymax+40),0, 0.5, (255,255,255),2, cv2.LINE_AA)
 
+				speedText = 'Swimming speed estimate: ' + str(speed)[0:4]+' m/s or '+str(BLspeed)[0:4]+' BL/s'
+				(w_speed, h_speed), _ = cv2.getTextSize(speedText, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2) ## Space required by text
+				cv2.putText(frame, speedText, (xmin, ymax+60),0, 0.7, (255,255,255),2, cv2.LINE_AA) ## Write text
 
 
 				if savePlots:
 					video_timeStamp = str(vid_timeStamp)[11:-1].replace(":", ".")
-					#print(str(vid_timeStamp)[11:-1])
-					#quit()
 					rxFile_timeStamp = timeStamp.replace(":", ".")
 					frame_filename = 'VideoFrame_2022-02-16_'+video_timeStamp+'.png'
 					RX_filename = 'RXSample_2022-02-16_'+rxFile_timeStamp+'.png'
@@ -608,27 +544,7 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 					os.remove(os.getcwd()+'/temp/'+RX_filename)
 
 
-
-			cv2.imshow(str(vid_timeStamp), frame)
-
-
-			#print("Echo peaks:", echoEnvelope[peaks])
-			#print("Max:", np.max(echoEnvelope[peaks]))
-
-			#fig2,ax2 = plt.subplots(1)
-
-			#ax2.plot(echoEnvelope, color='red')
-			#ax2.plot(echoEnvelope[peaks])
-			#plt.show()
-			#print("rlen", len(rangeVec))
-			#print("maxpeak index:",np.argmax(echoEnvelope[peaks]))
-
-
-
-			#print("Max peak:", maxPeak)
-			#print("Max peak idx:", maxPeak_idx)
-			#ax.plot(peaks, echoEnvelope[peaks], "x", alpha=0.5, label=timeStamp)
-
+			cv2.imshow(str(vid_timeStamp), frame) ## Display video frame
 
 			if not savePlots:
 				plt.waitforbuttonpress()
@@ -639,12 +555,14 @@ def extractTrackedTargets(trackerFile, videoFile, savePlots, showID):
 
 
 			cv2.destroyAllWindows()
-		#time.sleep(2)
-		#plt.show()
 
 
 
-def loadTrackerData(startTime, stopTime):
+def loadTrackerData(startTime, endTime):
+	''' Function for loading YOLOv4-DeepSORT CSV tracker file paths.
+		Inputs:
+			- [startTime, endTime]: Start and end time to load files within.
+	'''
 	directory = os.getcwd()+'/deepsort'
 	trackerFiles = []
 	for root, dirs, filenames in os.walk(directory, topdown=False):
@@ -653,9 +571,8 @@ def loadTrackerData(startTime, stopTime):
 				continue
 			hhmm = str(re.findall('[0-9]{2}-[0-9]{2}-[0-9]{2}', filename))[14:-5]
 			hhmm = hhmm.replace("-", ":")
-			if startTime <= hhmm <= stopTime:
+			if startTime <= hhmm <= endTime:
 				trackerFiles.append(root+'/'+filename)
-				#print("file added:", filename)
 
 	trackerFiles = sort(trackerFiles) ## Sorting by time
 
@@ -707,7 +624,7 @@ if __name__ == '__main__':
 		type=int,
 		default=0,
 		dest="showID",
-		help="To only show fusion data for ID #.",
+		help="To only process fusion data for ID #N.",
 	)
 
 	args = parser.parse_args()
@@ -718,18 +635,14 @@ if __name__ == '__main__':
 		trackerFiles = loadTrackerData(args.startTime, args.stopTime)
 		videoFiles = loadVideoFileNames_fusion(args.startTime, args.stopTime)
 
-		### Må kjøre CSV generering på video 12-04-50! ###
 		print("trackerFiles:", trackerFiles)
 		print("videos:", videoFiles)
-		#print(trackerFiles[0])
-		#print(videoFiles[1])
-
 
 
 		for i, trackerFile in enumerate(trackerFiles):
+			## Running sensor fusion on every video file iteratively ##
 			if len(trackerFiles) != len(videoFiles):
 				i=i+1
-			#fig, axs = plt.subplots(1)
 			print("\n")
 			print("Current file:", trackerFile)
 			print("Current video:", videoFiles[i])

@@ -1,7 +1,7 @@
-# Import required packages
+''' Script with functions enabling time-synchronized plotting of visual
+	and acoustic data from FISC capsule.
+'''
 import cv2
-#import pytesseract
-#import tesserocr
 import time
 from PIL import Image
 import numpy as np
@@ -62,11 +62,6 @@ def move_figure(f, x, y):
 	else:
 		f.canvas.manager.window.move(x, y)
 
-def inclinationHeading(imuData):
-	roll = imuData[0]
-	pitch = imuData[1]
-	heading = imuData[2]
-
 def parseVideoTime(filename):
 	''' Function for parsing video time start and end.
 		Input: Path to video file.
@@ -75,8 +70,7 @@ def parseVideoTime(filename):
 
 	try:
 		YYMMDDhhmmssff = str(re.findall('[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}.[0-9]{5}', filename))[2:-2]
-		print("kbhk", YYMMDDhhmmssff)
-		startTime = datetime.datetime.strptime(YYMMDDhhmmssff, '%Y-%m-%d-%H-%M-%S.%f') + datetime.timedelta(milliseconds=100)
+		startTime = datetime.datetime.strptime(YYMMDDhhmmssff, '%Y-%m-%d-%H-%M-%S.%f')# + datetime.timedelta(milliseconds=100)
 
 		endTime = startTime + datetime.timedelta(seconds=15)
 		startTime = str(startTime)[-15:]
@@ -174,6 +168,7 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 	#axs.plot(rangeVecShort, CH1_Env_TVG, label=rxFile_timeStamp, color='black')
 	'''
 	axs.set_xlabel("Range [m]")
+	axs.set_xlim([0,5])
 	axs.set_ylabel("Matched Filter Output")
 	axs.set_title("Acoustic Data for Ping "+rxFile_timeStamp)# for Fish #"+ID[0][1])
 	axs.grid(b=True, which="major", color="black", linestyle="-", alpha=0.5)
@@ -192,17 +187,16 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 
 	# Add text
 	cv2.putText(frame, 'Video file: '+video_timeStamp, (x + int(w/50),y + int(h/2)+5), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-	print("Filename now:", rx_file)
+	#print("Filename now:", rx_file)
 	if kwargs.get('showPlots'):
-
 		plt.draw()
 		frame_s = cv2.resize(frame, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_AREA)
 		cv2.imshow(video_timeStamp, frame_s)
 		if cv2.waitKey(1) & 0xFF == ord('q'):
 			quit()
-
-		#plt.pause(0.2)
-		plt.waitforbuttonpress()
+		if not kwargs.get("savePlots"):
+			print("Click anywhere on plot to continue to next sample.")
+			plt.waitforbuttonpress()
 
 	if kwargs.get("savePlots"):
 		video_timeStamp = video_timeStamp.replace(":", ".")
@@ -232,15 +226,13 @@ def genSyncPlot(axs, frame, video_timeStamp, rx_file, rxFile_timeStamp, **kwargs
 		os.remove(os.getcwd()+'/temp/'+frame_filename)
 		os.remove(os.getcwd()+'/temp/'+RX_filename)
 
-		#get_concat_v_resize(im1, im2, resize_big_image=False).save('data/dst/pillow_concat_v_resize.jpg')
-
 
 def syncPlot_timeStampFromFrames(videoFile, all_rx_files, **kwargs):
-	''' Parses files and finds video frame which is matched to rx data.
+	''' Parses files and finds video frame which coincides with acoustic ping.
 	'''
 
 	startTime, endTime = parseVideoTime(videoFile)
-	print("Start time:", startTime, "End time:", endTime)
+	print("Start time of video:", startTime, "End time of video:", endTime)
 
 	rxFilesInVideo = []
 	rxFiles_timeStamps = []

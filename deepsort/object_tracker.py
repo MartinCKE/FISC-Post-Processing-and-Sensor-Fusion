@@ -27,7 +27,7 @@ from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
 flags.DEFINE_string('framework', 'tf', '(tf, tflite, trt')
-flags.DEFINE_string('weights', './checkpoints/custom_3',
+flags.DEFINE_string('weights', './checkpoints/FISC',
 					'path to weights file')
 flags.DEFINE_integer('size', 416, 'resize images to')
 flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
@@ -45,13 +45,13 @@ flags.DEFINE_boolean('count', False, 'count objects being tracked on screen')
 flags.DEFINE_list('SF_timestamps',['13:12:06.25300', '13:12:06.55941'], 'RX-file timestamps' ) ## timestamps of RX files
 
 def parseVideoTime(filename):
+	''' Function for parsing timestamp start and end of each video.
+	'''
 	YYMMDDhhmmssff = str(re.findall('[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}.[0-9]{6}', filename))[2:-2]
-	print("kbhk", YYMMDDhhmmssff)
 	startTime = datetime.datetime.strptime(YYMMDDhhmmssff, '%Y-%m-%d-%H-%M-%S.%f')
 	endTime = startTime + datetime.timedelta(seconds=15)
 	startTime = str(startTime)[-15:]
-	endTime = str(endTime)[-15:]# +'.0'
-
+	endTime = str(endTime)[-15:]
 
 	return startTime, endTime
 
@@ -60,20 +60,6 @@ def main(_argv):
 	## FISC-related ###
 	match = False
 	trackerArray = [['RX Timestamp', 'Tracked ID', 'BBox Coords (xmin, ymin, xmax, ymax)']]
-	'''
-	print('\n')
-	print("hola", FLAGS.weights)
-	test = np.array((FLAGS.SF_timestamps), dtype='str')
-	print("test", test)
-	print(len(FLAGS.SF_timestamps))
-	for val in FLAGS.SF_timestamps:
-		print(val)
-		val.strip(".")
-		print(val)
-	quit()
-	'''
-	##
-
 
 	# Definition of the parameters
 	max_cosine_distance = 0.4

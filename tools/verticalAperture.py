@@ -1,3 +1,5 @@
+''' Script for visualizing characterization of vertical beam pattern for FISC.
+'''
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -7,6 +9,7 @@ import datetime
 import argparse
 from acousticProcessing import gen_mfilt, matchedFilter, butterworth_LP_filter
 
+'''
 noShading_1m = [[0.3, '11:11:22'], [0.5, '11:11:27'],
 				[0.635, '11:11:34'], [0.77, '11:11:40'],
 				[0.89, '11:11:49'], [1.025, '11:11:57'],
@@ -59,6 +62,7 @@ Shading_5mm_1m = [[0.3, '12:24:06'], [0.5, '12:24:11'],
 				[1.66, '12:25:04'], [1.785, '12:25:09'],
 				[1.92, '12:25:13'], [2.06, '12:25:17'],
 				[2.18, 'null'], [2.3, 'null']]
+'''
 
 center = 1.15 ## TX was 1m under surface, and 30cm between TX and RX
 d_max = 2.30
@@ -102,10 +106,11 @@ def getEchoData(file):
 	range_idx = round((2*d*fs)/c)
 	min_idx = range_idx# - 600
 	max_idx = range_idx + 200
-	#plt.plot(rangeVec[min_idx:max_idx], rxdata[min_idx:max_idx])
+	#plt.plot(rangeVec[min_idx:max_idx], rxdata[min_idx:max_idx], label=file[-18::])
 	#plt.plot(rangeVec,rxdata, label=file[-20::])
 	#plt.legend()
 	#plt.draw()
+	#plt.waitforbuttonpress()
 	#plt.pause(0.1)
 	#plt.clf()
 
@@ -115,15 +120,14 @@ def getEchoData(file):
 	#plt.show()
 	return rxdata[min_idx:max_idx]
 
-def calcbeam(files, Shading, dir):
+def calcbeam(files, raw, dir):
 	beam = []
 	angles = []
 	startTime = datetime.datetime.strptime(files[0][-18:-4], '%H:%M:%S.%f')
 	endTime = datetime.datetime.strptime(files[-1][-18:-4], '%H:%M:%S.%f')
 	t = endTime-startTime
 	t = t.total_seconds()  ##Time from depth= 0 to 2.3m
-	## TESTING ##
-	#t = 10
+
 	if dir == 'down':
 		depths = np.linspace(0, 2.3, len(files)) ## since ball was lowered with constant velocity
 	else:
@@ -131,78 +135,58 @@ def calcbeam(files, Shading, dir):
 
 	for i, file in enumerate(files):
 		data = getEchoData(file) ## matched filter output
-		#d = infoarr[i][0]
 
 		angle = np.arctan((1.15-depths[i]))
 
-
-		print("angle:", angle)
 		#peaks, _ = find_peaks(data, height=0)
 		#data = acousticProcessing.normalizeData(data)
 		p = 20*np.log10(data)
-
-		#plt.plot(data)
-		#plt.show()
 		beam.append(np.max(p))
-
-
-
-		#plt.plot(data, label=file[-20::])
-		#plt.show()
-
-
 		angles.append(angle)#+np.pi/2)
 		#plt.plot(peaks, data[peaks], "x")
 		#plt.legend()
 		#plt.show()
 
-	beam = butterworth_LP_filter(beam, cutoff=0.5, fs=25, order=2)
-	beam -= np.max(beam) ## normalizing to 0 dB
-
-	upper_intersect = np.where(beam>=-3)
-	left_upper_intersect = upper_intersect[0][0]
-	right_upper_intersect = upper_intersect[0][-1]
-
-
-
-	#data = acousticProcessing.normalizeData(data)
-	#plt.plot(data, color='red')
-	#plt.show()
-	#quit()
-	print(angles[left_upper_intersect])
-	print(angles[right_upper_intersect])
 
 	fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
 	ax.set_theta_zero_location("E")
-	ax.annotate(f" {round(-1*(np.rad2deg(angles[left_upper_intersect]))+np.rad2deg(angles[right_upper_intersect]),2)} deg\nbeam width", xy=(1, beam[left_upper_intersect]-1))
+
+	if not raw:
+		beam = butterworth_LP_filter(beam, cutoff=0.5, fs=25, order=2)
+		upper_intersect = np.where(beam>=-3)
+		left_upper_intersect = upper_intersect[0][0]
+		right_upper_intersect = upper_intersect[0][-1]
+		ax.annotate(f" {round(-1*(np.rad2deg(angles[left_upper_intersect]))+np.rad2deg(angles[right_upper_intersect]),2)} deg\nbeam width", xy=(1, beam[left_upper_intersect]-1))
+
+
+	beam -= np.max(beam) ## normalizing to 0 dB
 
 	ax.set_thetamax(90)
 	ax.set_thetamin(-90)
+	ax.set_ylabel('dB')
 	ax.plot(angles, beam)
-#	ax.set_ylabel("dB")
 
-	if Shading:
-		ax.set_title('FISC Total Vertical Beam Pattern, RX_h = 10mm')
-		path = os.getcwd()
+	if raw:
+		ax.set_title('FISC Total Vertical Beam Pattern, RX_h=10 mm, Unprocessed')
+		path = os.getcwd()+'/81358_fisc_post_processing/'
 		files = []
 		directory = os.path.abspath(os.path.join(path, os.pardir)) +'/plots/'
-		plt.savefig(directory+'FISC_VerticalBeams.pdf')
+		plt.savefig(directory+'FISC_VerticalBeams_raw.pdf')
 	else:
-		ax.set_title('FISC Vertical Beam Pattern, RX_h = 20mm (original)')
-
-	#plt.tight_layout()
+		ax.set_title('FISC Total Vertical Beam Pattern, RX_h=10 mm, Filtered')
+		path = os.getcwd()+'/81358_fisc_post_processing/'
+		files = []
+		directory = os.path.abspath(os.path.join(path, os.pardir)) +'/plots/'
+		plt.savefig(directory+'FISC_VerticalBeams_processed.pdf')
 
 	plt.show()
 
 
+def loadFileNames(startTime, endTime):#, arr):
 
-
-def loadFileNames(startTime, endTime, Shading):#, arr):
-
-	path = os.getcwd()#+'././data/SectorFocus/05-05-22'
+	path = os.getcwd()+'/81358_fisc_post_processing/'
 	files = []
 	directory = os.path.abspath(os.path.join(path, os.pardir)) +'/data/SectorFocus/05-05-22'
-
 	hhmmss_list = []
 	i = 0
 	for root, dirs, filenames in os.walk(directory, topdown=False):
@@ -221,99 +205,21 @@ def loadFileNames(startTime, endTime, Shading):#, arr):
 	return files
 
 def main():
-
 	parser = argparse.ArgumentParser()
 	parser.add_argument(
-		"--BW",
-		action="store",
-		type=int,
-		default=80e3,
-		dest='BW',
-		help="BW, 0 or 20e3",
-	)
-	parser.add_argument(
-		"--shading",
-		type=int,
-		action="store",
-		dest="shading",
-		help="Shading in mm (0, 10 or 15)",
-	)
-	parser.add_argument(
-		"--sector",
-		type=int,
-		action="store",
-		dest="sector",
-		help="Since tests were performed on sector 3 as well to compare",
+		"--raw",
+		action="store_true",
+		default=False,
+		dest='raw',
+		help="Raw or filteret processing.",
 	)
 	args = parser.parse_args()
-
-	'''
-	if args.BW == 0 and args.shading == None:
-		Shading = False
-		startTime = '13:15:00' ##0kHz BW run 2
-		endTime = '13:15:20'
-
-	elif args.BW == 20 and args.shading == None:
-		Shading = False
-		startTime = '12:07:58' ##20kHz BW
-		endTime = '12:08:15'
-
-	elif args.BW == 0 and args.shading == 10:
-		startTime = '13:19:12'
-		endTime =  '13:19:27'
-		Shading=True
-
-	elif args.BW == 0 and args.shading == 10:
-		pass
-
-	elif args.BW == 40 and args.shading == 10:
-		startTime = '14:57:15'
-		endTime =  '14:57:31'
-		Shading=True
-	elif args.BW == 40 and args.shading == None:
-		startTime = '15:00:27'
-		endTime =  '15:00:48'
-		Shading=False
-	elif args.BW == 40 and args.shading == 15:
-		startTime = '15:06:19'
-		endTime =  '15:06:41'
-		Shading=True
-
-	#startTime = '18:34:11' ## Sector 3 10mm shading
-	#endTime = '18:34:44'
-		## 10mm shading  14:57:15.3 - 14:57:31.8
-		## uten shading_gradient  15:00:27.86 - 15:00:46.91
-		## 15 mm shading 15:06:19.0 - 15:06:41.76
-
-
-	Shading = False
-	if Shading:
-		arr = Shading_10mm_1m
-		#startTime = '11:56:06' ## 11:55:20
-		#endTime = '11:56:29'
-		### 0kHz BW
-		startTime = '11:57:38'
-		endTime =  '11:58:04'
-		###
-		## 0kHz run 2
-		#startTime = '13:19:12'
-		#endTime =  '13:19:27'
-	else:
-		arr = noShading_1m
-		startTime = '12:07:58' ##20kHz BW
-		endTime = '12:08:15'   ##20kHz BW
-		#startTime = '13:15:00' ##0kHz BW run 2
-		#endTime = '13:15:20'
-	'''
 
 	startTime = '08:31:37'
 	endTime = '08:32:49'
 	dir = 'up'
-	Shading = True
-	filenames = loadFileNames(startTime, endTime, Shading)#, arr)
-
-	calcbeam(filenames, Shading, dir)
-	#print(filenames)
+	filenames = loadFileNames(startTime, endTime)#, arr)
+	calcbeam(filenames, args.raw, dir)
 
 if __name__ == '__main__':
 	main()
