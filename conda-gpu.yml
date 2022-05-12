@@ -15,10 +15,9 @@ dependencies:
     - absl-py
     - easydict
     - pillow
-    - re
-    - subprocess
+    - regex
     - datetime
     - argparse
     - scipy
-    - pylab
     - serial
+    - vpython
