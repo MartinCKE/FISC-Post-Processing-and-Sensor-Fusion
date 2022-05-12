@@ -9,14 +9,13 @@ dependencies:
     - opencv-python==4.1.1.26
     - lxml
     - tqdm
-    - tensorflow==2.3.0rc0
+    - tensorflow==2.3.0
     - absl-py
     - easydict
     - pillow
-    - re
-    - subprocess
+    - regex
     - datetime
     - argparse
     - scipy
-    - pylab
     - serial
+    - vpython

@@ -210,12 +210,14 @@ def plotIMUData(files, ace):
 	rollArr = []
 	pitchArr = []
 	headingArr = []
+
 	for file in files:
 		hhmmss = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}', file))[2:-2]
 		timeStamp = str(re.findall('[0-9]{2}:[0-9]{2}:[0-9]{2}.?[0-9]{5}', file))[2:-2]
 
 		data=np.load(file, allow_pickle=True)
 		imuData = data['IMU']
+		print("File:", file)
 
 
 		if imuData.shape[0] == 4:

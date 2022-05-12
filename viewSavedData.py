@@ -65,9 +65,9 @@ def loadFileNames(startTime, stopTime, sectorFocus, ace):
 
 	files = []
 	hhmmss_list = []
-
-
+	
 	for root, dirs, filenames in os.walk(directory, topdown=False):
+		print("root:", root)
 		for filename in filenames:
 			if '' in filename:
 				filename = filename.replace("", ":")
@@ -93,11 +93,11 @@ def loadVideoFileNames(startTime, stopTime, ace, deepsort):
 	videofiles = []
 	hhmmss_list = []
 	if ace and not deepsort:
-		directory = os.getcwd()+'/Data/cam_recordings/secondTest/compressed'
+		directory = os.getcwd()+'/data/cam_recordings/secondTest/compressed'
 	elif ace and deepsort:
 		directory = os.getcwd() + '/deepsort/outputs'
 	else:
-		directory = os.getcwd()+'/Data/cam_recordings/firstTest'
+		directory = os.getcwd()+'/data/cam_recordings/firstTest'
 
 	for root, dirs, filenames in os.walk(directory, topdown=False):
 		for filename in filenames:
@@ -196,7 +196,9 @@ if __name__ == '__main__':
 	if args.syncPlot and not args.o2temp:
 		rx_files = loadFileNames(args.startTime, args.stopTime, args.sectorFocus, args.ace)
 		videoFiles = loadVideoFileNames(args.startTime, args.stopTime, args.ace, args.deepsort)
+		print("iubibbibi")
 		for video in videoFiles:
+			print("video:", video)
 			syncPlot_timeStampFromFrames(video, rx_files, sectorFocus=args.sectorFocus, \
 												savePlots=args.savePlots, showPlots=args.showPlots, ace=args.ace, deepsort=args.deepsort)
 
