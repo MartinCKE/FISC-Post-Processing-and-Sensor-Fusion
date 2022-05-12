@@ -5,8 +5,8 @@ Post processing and sendor fusion-related tasks on FISC data.
 
 Installation guide.
 
-1. Download repository 
-2. Download and install anaconda or miniconda which matches the Python version you’ve got (> 3.7). Anaconda is required to create a virtual environment with the specific version of all packages to run the software.
+1. Download repository.
+2. Download and install anaconda or miniconda which matches the Python version you’ve got (> 3.7). An anaconda virtual environment is required to run the deep learning pipeline due to specific version dependencies, but is generally recommended for all the implemented processing to ensure that the software runs without any hickups.
 3. After conda is installed, create a virtual environment by using commands:
     1. If no GPU acceleration is used, run: “conda env create -f conda-cpu.yml”
     2. If CUDA-supported GPU is used, run: “conda env create -f conda-cgpu.yml”. This requires CUDA Toolkit 10.1 to be installed (https://developer.nvidia.com/cuda-10.1-download-archive-update2)
@@ -14,10 +14,11 @@ Installation guide.
 5. Only 3 videos are included in the repository due to file size constraints.
    All videos from the second field test can be downloaded from:
    https://drive.google.com/file/d/1oTzxz269bf6eGfWYmWoPtyDgbs2yqzVT/view?usp=sharing
+   Place these video files in the "data/cam_recordings/secondTest/compressed/" directory.
 6. If you are going to run the YOLOv4-DeepSORT software (generate), you need the custom trained weight files or the YOLOv4 model. 
    These are downloaded from: https://drive.google.com/file/d/1AZcUAWdVLyUQrFmTyyS0RiiCWRj2nww7/view?usp=sharing
+   Place these two folders within the "deepsort/checkpoints/" directory. Only "FISC" folder is needed, but "FISC_4" is a supplementary model with fewer training images.
 
-Place these videos in the data/cam_recordings/secondTest/compress directory.
 Now, you're ready to test the FISC processing software! 
 
 NOTE: No videos from the initial field test are included in the repository, so any attempts to visualize acoustic AND visual data without the "--ace" argument will not do anything.
