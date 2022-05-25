@@ -2,6 +2,7 @@
 
 Post processing and sendor fusion-related tasks on FISC data.
 
+Link to view the thesis: https://drive.google.com/file/d/1cEADiDEYU4RS6R8v8hvh167eQV1K3HIL/view?usp=sharing
 
 Installation guide.
 
